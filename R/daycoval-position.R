@@ -271,6 +271,95 @@ parse_daycoval_position_types <- function(data, record_type) {
     )
 
     date_columns <- "data"
+  } else if (record_type == "P1030Caixa") {
+    numeric_columns <- c(
+      "merc_blq_fin_atu",
+      "vl_mrc",
+      "vl_pat_liq"
+    )
+
+    integer_columns <- character()
+    date_columns <- character()
+  } else if (record_type %in% c(
+    "P1030AReceber",
+    "P1030APagar"
+  )) {
+    numeric_columns <- c(
+      "valor",
+      "sld_tit",
+      "tot_grp",
+      "tot_geral",
+      "vl_pat_liq"
+    )
+
+    integer_columns <- character()
+    date_columns <- "dt_venc"
+  } else if (record_type == "P1030RF") {
+    numeric_columns <- c(
+      "fator_adic",
+      "tx_emis",
+      "pu_compra",
+      "pu_bruto",
+      "qtd",
+      "qtd_blq",
+      "vl_cst",
+      "vl_mrc",
+      "vl_pat_liq",
+      "vl_iriof"
+    )
+
+    integer_columns <- c(
+      "dec_taxa",
+      "dec_qtd",
+      "dec_pu"
+    )
+
+    date_columns <- c(
+      "dt_emis",
+      "dt_venc",
+      "dt_base",
+      "dt_compra",
+      "dt_ini_uso_ccdi"
+    )
+  } else if (record_type == "P1030RV") {
+    numeric_columns <- c(
+      "qtd",
+      "qtd_blq",
+      "vl_mrc",
+      "vl_pat_liq",
+      "pu_compra",
+      "pu_atual_bruto"
+    )
+
+    integer_columns <- c(
+      "dec_pu",
+      "dec_qtd"
+    )
+
+    date_columns <- "data"
+  } else if (record_type == "P1030Futuros") {
+    numeric_columns <- c(
+      "qtd",
+      "vl_noc",
+      "ajuste",
+      "vl_pat_liq",
+      "ponto"
+    )
+
+    integer_columns <- character()
+    date_columns <- "data_venc"
+  } else if (record_type == "P1030MovCotistas") {
+    numeric_columns <- c(
+      "tot_apl",
+      "tot_rgt"
+    )
+
+    integer_columns <- c(
+      "num_dias_agnd_apl",
+      "num_dias_agnd_rgt"
+    )
+
+    date_columns <- character()
   } else {
     cli::cli_abort(
       "A tipagem do layout {.val {record_type}} não está definida."
@@ -488,5 +577,154 @@ parse_daycoval_position_metadata <- function(
     linha_cadastro = cadastro$source_line[[1L]],
     registro_rentabilidade = registro_rentabilidade,
     linha_rentabilidade = linha_rentabilidade
+  )
+}
+
+#' Read a Daycoval portfolio position report
+#'
+#' Imports a Daycoval "Posição de Carteira C" CSV report,
+#' preserving its original records, declared layouts, and
+#' financial information.
+#'
+#' Supported layouts are converted to their corresponding
+#' data types. Other declared layouts are retained as
+#' character tables under `positions$other`.
+#'
+#' @param path Path to the Daycoval position CSV file.
+#' @param source_name Name identifying the source file.
+#' @param encoding Character encoding of the CSV file.
+#'
+#' @return An object of class `daycoval_position` containing
+#'   `metadata`, `positions`, `cash`, `receivables`, `payables`,
+#'   `returns`, `shareholder_flows`, `layouts`, and `raw`.
+#'   Optional layouts absent from the CSV return `NULL`.
+#'
+#' @export
+read_daycoval_position <- function(
+    path,
+    source_name = basename(path),
+    encoding = "Latin1"
+) {
+  records <- read_daycoval_records(
+    path = path,
+    source_name = source_name,
+    encoding = encoding
+  )
+
+  layouts <- parse_daycoval_position_layouts(records)
+
+  required_layouts <- c(
+    "P1030",
+    "P1030Rentabilidades"
+  )
+
+  missing_layouts <- setdiff(
+    required_layouts,
+    layouts$record_type
+  )
+
+  if (length(missing_layouts) > 0L) {
+    cli::cli_abort(
+      "Layouts obrigatórios ausentes: {.or {missing_layouts}}."
+    )
+  }
+
+  typed_layouts <- c(
+    "P1030",
+    "P1030RF",
+    "P1030CF",
+    "P1030RV",
+    "P1030Futuros",
+    "P1030Caixa",
+    "P1030AReceber",
+    "P1030APagar",
+    "P1030Rentabilidades",
+    "P1030MovCotistas"
+  )
+
+  parsed <- purrr::map(
+    layouts$record_type,
+    function(record_type) {
+      data <- parse_daycoval_position_layout(
+        records = records,
+        layouts = layouts,
+        record_type = record_type
+      )
+
+      if (record_type %in% typed_layouts) {
+        return(
+          parse_daycoval_position_types(
+            data = data,
+            record_type = record_type
+          )
+        )
+      }
+
+      data
+    }
+  )
+
+  names(parsed) <- layouts$record_type
+
+  get_layout <- function(record_type) {
+    if (!record_type %in% names(parsed)) {
+      return(NULL)
+    }
+
+    parsed[[record_type]]
+  }
+
+  metadata <- parse_daycoval_position_metadata(
+    cadastro = get_layout("P1030"),
+    rentabilidades = get_layout("P1030Rentabilidades")
+  )
+
+  codigo_carteira <- metadata$codigo_carteira
+
+  for (record_type in names(parsed)) {
+    data <- parsed[[record_type]]
+
+    if (!"cd_crt" %in% names(data) || nrow(data) == 0L) {
+      next
+    }
+
+    identifiers <- stringr::str_trim(data$cd_crt)
+
+    invalid <- is.na(identifiers) |
+      identifiers != codigo_carteira
+
+    if (any(invalid)) {
+      cli::cli_abort(
+        "O layout {.val {record_type}} contém registros
+         de outra carteira."
+      )
+    }
+  }
+
+  other_layouts <- parsed[
+    !(names(parsed) %in% typed_layouts)
+  ]
+
+  positions <- list(
+    fixed_income = get_layout("P1030RF"),
+    funds = get_layout("P1030CF"),
+    equities = get_layout("P1030RV"),
+    futures = get_layout("P1030Futuros"),
+    other = other_layouts
+  )
+
+  structure(
+    list(
+      metadata = metadata,
+      positions = positions,
+      cash = get_layout("P1030Caixa"),
+      receivables = get_layout("P1030AReceber"),
+      payables = get_layout("P1030APagar"),
+      returns = get_layout("P1030Rentabilidades"),
+      shareholder_flows = get_layout("P1030MovCotistas"),
+      layouts = layouts,
+      raw = records
+    ),
+    class = "daycoval_position"
   )
 }
