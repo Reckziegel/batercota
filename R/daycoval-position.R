@@ -728,3 +728,573 @@ read_daycoval_position <- function(
     class = "daycoval_position"
   )
 }
+
+
+#' Reconcile Daycoval portfolio reports
+#'
+#' Reconciles a Daycoval daily portfolio with a Position C report,
+#' preserving source references, matching decisions, and financial
+#' differences.
+#'
+#' The initial implementation supports investment fund positions only.
+#' Matching is based on operational identifiers, independently of
+#' quantities and market values.
+#'
+#' @param portfolio A `daycoval_portfolio` object.
+#' @param position A `daycoval_position` object.
+#' @param components Character scalar specifying the component to reconcile.
+#'   Currently, only `"funds"` is supported.
+#'
+#' @return A `daycoval_reconciliation` object containing:
+#' \describe{
+#'   \item{metadata}{Report identification and reconciliation scope.}
+#'   \item{matches}{Unique associations between source records.}
+#'   \item{checks}{Financial comparisons for associated records.}
+#'   \item{issues}{Unmatched, ambiguous, or unclassified records.}
+#'   \item{summary}{Reconciliation counts and coverage.}
+#' }
+#'
+#' @export
+reconcile_daycoval <- function(
+    portfolio,
+    position,
+    components = "funds"
+) {
+  daycoval_validate_reconciliation(
+    portfolio = portfolio,
+    position = position,
+    components = components
+  )
+
+  daycoval_reconcile_funds(
+    portfolio = portfolio,
+    position = position
+  )
+}
+
+
+daycoval_validate_reconciliation <- function(
+    portfolio,
+    position,
+    components
+) {
+  if (!inherits(portfolio, "daycoval_portfolio")) {
+    cli::cli_abort(
+      "`portfolio` deve ser um objeto {.cls daycoval_portfolio}."
+    )
+  }
+
+  if (!inherits(position, "daycoval_position")) {
+    cli::cli_abort(
+      "`position` deve ser um objeto {.cls daycoval_position}."
+    )
+  }
+
+  if (!identical(components, "funds")) {
+    cli::cli_abort(
+      "`components` deve ser {.val funds} nesta versão."
+    )
+  }
+
+  required_metadata <- c(
+    "codigo_carteira",
+    "data_posicao",
+    "arquivo_origem"
+  )
+
+  for (object in list(portfolio, position)) {
+    if (!is.list(object$metadata) ||
+        !all(required_metadata %in% names(object$metadata))) {
+      cli::cli_abort(
+        "Os relatórios não possuem os metadados obrigatórios."
+      )
+    }
+
+    metadata <- object$metadata
+
+    valid_code <- is.character(metadata$codigo_carteira) &&
+      length(metadata$codigo_carteira) == 1L &&
+      !is.na(metadata$codigo_carteira) &&
+      nzchar(stringr::str_trim(metadata$codigo_carteira))
+
+    valid_date <- inherits(metadata$data_posicao, "Date") &&
+      length(metadata$data_posicao) == 1L &&
+      !is.na(metadata$data_posicao)
+
+    if (!valid_code || !valid_date) {
+      cli::cli_abort(
+        "Os relatórios devem possuir carteira e data válidas."
+      )
+    }
+  }
+
+  if (!identical(
+    stringr::str_trim(portfolio$metadata$codigo_carteira),
+    stringr::str_trim(position$metadata$codigo_carteira)
+  )) {
+    cli::cli_abort(
+      "Os relatórios pertencem a carteiras diferentes."
+    )
+  }
+
+  if (!identical(
+    portfolio$metadata$data_posicao,
+    position$metadata$data_posicao
+  )) {
+    cli::cli_abort(
+      "Os relatórios possuem datas diferentes."
+    )
+  }
+
+  invisible(NULL)
+}
+
+
+daycoval_require_reconciliation_columns <- function(
+    data,
+    columns,
+    source
+) {
+  if (!is.data.frame(data)) {
+    cli::cli_abort(
+      "{.val {source}} deve conter uma tabela válida."
+    )
+  }
+
+  missing_columns <- setdiff(columns, names(data))
+
+  if (length(missing_columns) > 0L) {
+    cli::cli_abort(
+      "Colunas ausentes em {.val {source}}: {.or {missing_columns}}."
+    )
+  }
+
+  invisible(NULL)
+}
+
+
+daycoval_prepare_fund_candidates <- function(portfolio, position) {
+  fund_groups <- c(
+    "15801",
+    "15803",
+    "15805",
+    "15812",
+    "16007",
+    "16008"
+  )
+
+  entries <- portfolio$entries
+  funds <- position$positions$funds
+
+  if (is.null(funds)) {
+    funds <- tibble::tibble(
+      source_file = character(),
+      source_line = integer(),
+      record_number = character(),
+      titulo = character(),
+      qtd = double(),
+      vl_mrc = double(),
+      cnpj = character(),
+      isin = character()
+    )
+  }
+
+  daycoval_require_reconciliation_columns(
+    data = entries,
+    columns = c(
+      "source_file",
+      "source_line",
+      "record_number",
+      "titulo",
+      "grp_n1",
+      "grp_n2",
+      "grp_n3",
+      "qt",
+      "vl_mrc"
+    ),
+    source = "portfolio$entries"
+  )
+
+  daycoval_require_reconciliation_columns(
+    data = funds,
+    columns = c(
+      "source_file",
+      "source_line",
+      "record_number",
+      "titulo",
+      "qtd",
+      "vl_mrc",
+      "cnpj",
+      "isin"
+    ),
+    source = "position$positions$funds"
+  )
+
+  if (!is.numeric(entries$qt) ||
+      !is.numeric(entries$vl_mrc) ||
+      !is.numeric(funds$qtd) ||
+      !is.numeric(funds$vl_mrc)) {
+    cli::cli_abort(
+      "Quantidades e valores de mercado devem ser numéricos."
+    )
+  }
+
+  position_funds <- funds |>
+    dplyr::transmute(
+      key = dplyr::na_if(
+        stringr::str_trim(.data$titulo),
+        ""
+      ),
+      position_source_file = .data$source_file,
+      position_source_line = .data$source_line,
+      position_record_number = .data$record_number,
+      position_title = .data$titulo,
+      position_quantity = .data$qtd,
+      position_market_value = .data$vl_mrc,
+      position_cnpj = .data$cnpj,
+      position_isin = .data$isin
+    )
+
+  position_keys <- unique(
+    position_funds$key[!is.na(position_funds$key)]
+  )
+
+  portfolio_funds <- entries |>
+    dplyr::mutate(
+      key = dplyr::na_if(
+        stringr::str_trim(.data$titulo),
+        ""
+      ),
+      accounting_group = stringr::str_trim(.data$grp_n3),
+      mapped_group = .data$grp_n1 == "10000" &
+        .data$accounting_group %in% fund_groups
+    ) |>
+    dplyr::filter(
+      .data$mapped_group |
+        (!is.na(.data$key) & .data$key %in% position_keys)
+    ) |>
+    dplyr::transmute(
+      key = .data$key,
+      portfolio_source_file = .data$source_file,
+      portfolio_source_line = .data$source_line,
+      portfolio_record_number = .data$record_number,
+      portfolio_title = .data$titulo,
+      portfolio_group_n1 = .data$grp_n1,
+      portfolio_group_n2 = .data$grp_n2,
+      portfolio_group_n3 = .data$grp_n3,
+      portfolio_quantity = .data$qt,
+      portfolio_market_value = .data$vl_mrc,
+      classification_status = dplyr::if_else(
+        .data$mapped_group,
+        "mapped",
+        "unmapped"
+      )
+    )
+
+  if (anyDuplicated(portfolio_funds[
+    c("portfolio_source_file", "portfolio_source_line")
+  ])) {
+    cli::cli_abort(
+      "A Carteira Diária contém referências de origem duplicadas."
+    )
+  }
+
+  if (anyDuplicated(position_funds[
+    c("position_source_file", "position_source_line")
+  ])) {
+    cli::cli_abort(
+      "A Posição C contém referências de origem duplicadas."
+    )
+  }
+
+  list(
+    portfolio = portfolio_funds,
+    position = position_funds,
+    fund_groups = fund_groups
+  )
+}
+
+
+daycoval_match_funds <- function(portfolio_funds, position_funds) {
+  portfolio_counts <- portfolio_funds |>
+    dplyr::filter(!is.na(.data$key)) |>
+    dplyr::count(.data$key, name = "n_portfolio")
+
+  position_counts <- position_funds |>
+    dplyr::filter(!is.na(.data$key)) |>
+    dplyr::count(.data$key, name = "n_position")
+
+  counts <- dplyr::full_join(
+    portfolio_counts,
+    position_counts,
+    by = "key"
+  ) |>
+    dplyr::mutate(
+      n_portfolio = dplyr::coalesce(.data$n_portfolio, 0L),
+      n_position = dplyr::coalesce(.data$n_position, 0L)
+    )
+
+  matched_keys <- counts |>
+    dplyr::filter(
+      .data$n_portfolio == 1L,
+      .data$n_position == 1L
+    ) |>
+    dplyr::pull(.data$key)
+
+  ambiguous_keys <- counts |>
+    dplyr::filter(
+      .data$n_portfolio > 0L,
+      .data$n_position > 0L,
+      .data$n_portfolio > 1L | .data$n_position > 1L
+    ) |>
+    dplyr::pull(.data$key)
+
+  matches <- portfolio_funds |>
+    dplyr::filter(.data$key %in% matched_keys) |>
+    dplyr::inner_join(
+      position_funds |>
+        dplyr::filter(.data$key %in% matched_keys),
+      by = "key"
+    ) |>
+    dplyr::arrange(.data$key) |>
+    dplyr::mutate(
+      match_id = sprintf(
+        "funds_%04d",
+        dplyr::row_number()
+      ),
+      component = "funds",
+      match_type = "direct",
+      rule_id = "funds_operational_title_v1",
+      .before = 1L
+    )
+
+  list(
+    matches = matches,
+    ambiguous_keys = ambiguous_keys
+  )
+}
+
+
+daycoval_check_fund_field <- function(
+    matches,
+    field,
+    portfolio_column,
+    position_column
+) {
+  matches |>
+    dplyr::transmute(
+      match_id = .data$match_id,
+      component = "funds",
+      field = .env$field,
+      portfolio_value = .data[[portfolio_column]],
+      position_value = .data[[position_column]]
+    ) |>
+    dplyr::mutate(
+      difference = .data$portfolio_value - .data$position_value,
+      status = dplyr::case_when(
+        is.na(.data$portfolio_value) |
+          is.na(.data$position_value) ~ "not_evaluated",
+        .data$portfolio_value == .data$position_value ~ "equal",
+        TRUE ~ "different"
+      )
+    )
+}
+
+
+daycoval_check_funds <- function(matches) {
+  quantities <- daycoval_check_fund_field(
+    matches = matches,
+    field = "quantity",
+    portfolio_column = "portfolio_quantity",
+    position_column = "position_quantity"
+  )
+
+  market_values <- daycoval_check_fund_field(
+    matches = matches,
+    field = "market_value",
+    portfolio_column = "portfolio_market_value",
+    position_column = "position_market_value"
+  )
+
+  dplyr::bind_rows(
+    quantities,
+    market_values
+  ) |>
+    dplyr::arrange(.data$match_id, .data$field)
+}
+
+
+daycoval_fund_issues <- function(
+    portfolio_funds,
+    position_funds,
+    matches,
+    ambiguous_keys
+) {
+  portfolio_issues <- portfolio_funds |>
+    dplyr::anti_join(
+      matches,
+      by = c(
+        "portfolio_source_file",
+        "portfolio_source_line"
+      )
+    ) |>
+    dplyr::transmute(
+      component = "funds",
+      issue_type = dplyr::if_else(
+        !is.na(.data$key) & .data$key %in% ambiguous_keys,
+        "ambiguous",
+        "unmatched_portfolio"
+      ),
+      key = .data$key,
+      source_report = "portfolio",
+      source_file = .data$portfolio_source_file,
+      source_line = .data$portfolio_source_line,
+      record_number = .data$portfolio_record_number,
+      accounting_group = .data$portfolio_group_n3
+    )
+
+  position_issues <- position_funds |>
+    dplyr::anti_join(
+      matches,
+      by = c(
+        "position_source_file",
+        "position_source_line"
+      )
+    ) |>
+    dplyr::transmute(
+      component = "funds",
+      issue_type = dplyr::if_else(
+        !is.na(.data$key) & .data$key %in% ambiguous_keys,
+        "ambiguous",
+        "unmatched_position"
+      ),
+      key = .data$key,
+      source_report = "position",
+      source_file = .data$position_source_file,
+      source_line = .data$position_source_line,
+      record_number = .data$position_record_number,
+      accounting_group = NA_character_
+    )
+
+  classification_issues <- matches |>
+    dplyr::filter(.data$classification_status == "unmapped") |>
+    dplyr::transmute(
+      component = "funds",
+      issue_type = "unmapped_accounting_group",
+      key = .data$key,
+      source_report = "portfolio",
+      source_file = .data$portfolio_source_file,
+      source_line = .data$portfolio_source_line,
+      record_number = .data$portfolio_record_number,
+      accounting_group = .data$portfolio_group_n3
+    )
+
+  dplyr::bind_rows(
+    portfolio_issues,
+    position_issues,
+    classification_issues
+  ) |>
+    dplyr::arrange(
+      .data$issue_type,
+      .data$source_report,
+      .data$source_line
+    )
+}
+
+
+daycoval_summarise_funds <- function(
+    portfolio_funds,
+    position_funds,
+    matches,
+    checks,
+    issues
+) {
+  match_results <- checks |>
+    dplyr::group_by(.data$match_id) |>
+    dplyr::summarise(
+      equal = all(.data$status == "equal"),
+      different = any(.data$status == "different"),
+      .groups = "drop"
+    )
+
+  tibble::tibble(
+    component = "funds",
+    portfolio_records = nrow(portfolio_funds),
+    position_records = nrow(position_funds),
+    matched = nrow(matches),
+    matched_equal = sum(match_results$equal),
+    matched_different = sum(match_results$different),
+    matched_not_evaluated = sum(
+      !match_results$equal & !match_results$different
+    ),
+    unmatched_portfolio = sum(
+      issues$issue_type == "unmatched_portfolio"
+    ),
+    unmatched_position = sum(
+      issues$issue_type == "unmatched_position"
+    ),
+    ambiguous_records = sum(
+      issues$issue_type == "ambiguous"
+    ),
+    unmapped_accounting_groups = sum(
+      issues$issue_type == "unmapped_accounting_group"
+    )
+  )
+}
+
+
+daycoval_reconcile_funds <- function(portfolio, position) {
+  candidates <- daycoval_prepare_fund_candidates(
+    portfolio = portfolio,
+    position = position
+  )
+
+  portfolio_funds <- candidates$portfolio
+  position_funds <- candidates$position
+
+  matching <- daycoval_match_funds(
+    portfolio_funds = portfolio_funds,
+    position_funds = position_funds
+  )
+
+  matches <- matching$matches
+
+  checks <- daycoval_check_funds(matches)
+
+  issues <- daycoval_fund_issues(
+    portfolio_funds = portfolio_funds,
+    position_funds = position_funds,
+    matches = matches,
+    ambiguous_keys = matching$ambiguous_keys
+  )
+
+  summary <- daycoval_summarise_funds(
+    portfolio_funds = portfolio_funds,
+    position_funds = position_funds,
+    matches = matches,
+    checks = checks,
+    issues = issues
+  )
+
+  metadata <- list(
+    codigo_carteira = portfolio$metadata$codigo_carteira,
+    data_posicao = portfolio$metadata$data_posicao,
+    arquivo_carteira = portfolio$metadata$arquivo_origem,
+    arquivo_posicao = position$metadata$arquivo_origem,
+    components = "funds",
+    mapped_fund_groups = candidates$fund_groups,
+    classification_scope = "observed_groups_and_shared_titles"
+  )
+
+  structure(
+    list(
+      metadata = metadata,
+      matches = matches,
+      checks = checks,
+      issues = issues,
+      summary = summary
+    ),
+    class = "daycoval_reconciliation"
+  )
+}
+

@@ -3,3 +3,4 @@
 export(read_daycoval_portfolio)
 export(read_daycoval_position)
 export(read_daycoval_records)
+export(reconcile_daycoval)
