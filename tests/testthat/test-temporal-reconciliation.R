@@ -773,3 +773,152 @@ test_that("real Compass redemption follows its conversion date", {
 
 
 
+temporal_real_position_changes <- function(fund) {
+  cases <- temporal_reconciliation_cases()
+
+  previous_case <- cases[[paste0(fund, "_16")]]
+  current_case <- cases[[paste0(fund, "_19")]]
+
+  previous <- temporal_reconciliation_result(previous_case)
+  current <- temporal_reconciliation_result(current_case)
+
+  result <- reconcile_position_changes(
+    previous = previous,
+    current = current,
+    operations = temporal_test_operations(),
+    previous_position = temporal_reconciliation_position(
+      previous_case
+    ),
+    current_position = temporal_reconciliation_position(
+      current_case
+    )
+  )
+
+  list(
+    previous = previous,
+    current = current,
+    result = result
+  )
+}
+
+
+test_that("real position changes preserve asset identity", {
+  for (fund in c("long_term", "linear")) {
+    case <- temporal_real_position_changes(fund)
+    changes <- case$result$changes
+
+    expect_s3_class(
+      case$result,
+      "position_changes"
+    )
+
+    expect_identical(
+      case$result$metadata$previous_date,
+      as.Date("2026-10-16")
+    )
+
+    expect_identical(
+      case$result$metadata$current_date,
+      as.Date("2026-10-19")
+    )
+
+    expect_setequal(
+      changes$daycoval_title,
+      union(
+        case$previous$matches$daycoval_title,
+        case$current$matches$daycoval_title
+      )
+    )
+
+    expect_false(
+      anyDuplicated(changes$daycoval_title) > 0L
+    )
+
+    # Sweep funds are Daycoval-only exceptions,
+    # not matched XP investment positions.
+    expect_false(any(
+      stringr::str_detect(
+        changes$daycoval_title,
+        "^TPUBI"
+      )
+    ))
+
+    expect_true(all(
+      case$result$links$conversion_date >
+        as.Date("2026-10-16")
+    ))
+
+    expect_true(all(
+      case$result$links$conversion_date <=
+        as.Date("2026-10-19")
+    ))
+  }
+})
+
+
+test_that("real Compass redemption is linked without imputing shares", {
+  case <- temporal_real_position_changes("linear")
+  result <- case$result
+
+  compass <- result$changes |>
+    dplyr::filter(
+      .data$daycoval_title == "CF 47936719"
+    )
+
+  expect_equal(nrow(compass), 1L)
+
+  expect_identical(
+    compass$change_type[[1L]],
+    "held"
+  )
+
+  # Both sources report fewer shares on October 19.
+  expect_lt(
+    compass$xp_quantity_change[[1L]],
+    0
+  )
+
+  expect_lt(
+    compass$daycoval_quantity_change[[1L]],
+    0
+  )
+
+  # The actual redemption is identified using its
+  # instrument identity and conversion date.
+  redemption <- result$links |>
+    dplyr::filter(
+      .data$daycoval_title == "CF 47936719",
+      .data$operation_type == "Resgate Bruto",
+      .data$operation_date == as.Date("2026-04-20"),
+      .data$conversion_date == as.Date("2026-10-19")
+    )
+
+  expect_equal(nrow(redemption), 1L)
+
+  expect_equal(
+    redemption$value,
+    100000
+  )
+
+  expect_true(
+    is.na(redemption$signed_quantity[[1L]])
+  )
+
+  expect_true(
+    compass$n_conversions[[1L]] >= 1L
+  )
+
+  expect_identical(
+    compass$operation_status[[1L]],
+    "quantity_unavailable"
+  )
+
+  # A linked redemption is evidence of an event,
+  # not automatic proof of quantity reconciliation.
+  expect_true(is.na(
+    compass$signed_operation_quantity[[1L]]
+  ))
+})
+
+
+
