@@ -428,6 +428,7 @@ xp_require_cells <- function(values, expected, section, source_page, source_row)
 }
 
 
+
 xp_parse_positions <- function(raw, lines) {
   header <- xp_unique_line(
     lines,
@@ -443,12 +444,17 @@ xp_parse_positions <- function(raw, lines) {
 
   if (header$source_page[[1L]] != total$source_page[[1L]] ||
       header$y[[1L]] >= total$y[[1L]]) {
-    cli::cli_abort("A seção de posição consolidada possui limites inválidos.")
+    cli::cli_abort(
+      "A seção de posição consolidada possui limites inválidos."
+    )
   }
 
   anchors <- xp_column_anchors(xp_line_tokens(raw, header))
   position_fields <- names(anchors)
-  amount_fields <- setdiff(position_fields, c("unit_price", "quantity"))
+  amount_fields <- setdiff(
+    position_fields,
+    c("unit_price", "quantity")
+  )
 
   records <- lines |>
     dplyr::filter(
@@ -476,17 +482,44 @@ xp_parse_positions <- function(raw, lines) {
         source_row = row$source_row[[1L]]
       )
 
-      # Fragmentos isolados do horário pertencem à marca-d'água XP.
+      numeric_source_tokens <- numeric_tokens$source_token
+
+      unit_price_x <- numeric_tokens$x[
+        numeric_tokens$field == "unit_price"
+      ]
+
+      quantity_x <- numeric_tokens$x[
+        numeric_tokens$field == "quantity"
+      ]
+
+      # Nomes longos podem se sobrepor à coluna de cota.
+      # Exclui fragmentos isolados da marca-d'água XP.
       name_tokens <- tokens |>
         dplyr::filter(
-          .data$x < min(numeric_tokens$x),
+          !(.data$source_token %in% .env$numeric_source_tokens),
+          .data$x < .env$quantity_x,
+          (
+            .data$x < .env$unit_price_x |
+              stringr::str_detect(
+                .data$text,
+                "^[[:alpha:]]+$"
+              )
+          ),
           !stringr::str_detect(
             .data$text,
             "^[0-9]{1,2}:[0-9]{1,2}$"
+          ),
+          !stringr::str_detect(
+            .data$text,
+            "^-[0-9]{2}$"
           )
         )
 
-      asset_name <- paste(name_tokens$text, collapse = " ")
+      asset_name <- paste(
+        name_tokens$text,
+        collapse = " "
+      )
+
       asset_name <- stringr::str_squish(asset_name)
 
       if (!nzchar(asset_name)) {
@@ -519,8 +552,13 @@ xp_parse_positions <- function(raw, lines) {
     }
   )
 
-  if (nrow(positions) == 0L || anyDuplicated(positions$asset_name)) {
-    cli::cli_abort("A posição consolidada não possui fundos distintos válidos.")
+  if (
+    nrow(positions) == 0L ||
+    anyDuplicated(positions$asset_name)
+  ) {
+    cli::cli_abort(
+      "A posição consolidada não possui fundos distintos válidos."
+    )
   }
 
   total_tokens <- xp_line_tokens(raw, total)
@@ -547,6 +585,7 @@ xp_parse_positions <- function(raw, lines) {
     totals = as.list(reported)
   )
 }
+
 
 
 xp_validate_totals <- function(positions, metadata) {

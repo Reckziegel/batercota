@@ -303,19 +303,16 @@ test_that("rejects missing typed columns", {
 })
 
 
-test_that("does not guess types for unsupported layouts", {
-  fixture <- make_daycoval_position_typing_fixture()
 
-  funds <- parse_daycoval_position_layout(
-    fixture$records,
-    fixture$layouts,
-    "P1030CF"
+test_that("rejects unsupported position layouts", {
+  data <- tibble::tibble(
+    source_line = 1L
   )
 
   expect_error(
     parse_daycoval_position_types(
-      funds,
-      "P1030RV"
+      data,
+      record_type = "P1030_UNSUPPORTED_TEST"
     ),
     "não está definida"
   )
