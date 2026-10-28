@@ -1,17 +1,70 @@
 
-options(shiny.maxRequestSize = 50 * 1024^2)
+# Bater Cota - Shiny application
+#
+# Run from the project root:
+# devtools::load_all(".")
+# shiny::runApp("plataforma/app_reconciliation.R")
+
+bc_report_path <- function(path, label, extensions) {
+  if (
+    !is.character(path) ||
+    length(path) != 1L ||
+    is.na(path) ||
+    !nzchar(trimws(path))
+  ) {
+    stop(
+      paste("Informe o caminho de:", label),
+      call. = FALSE
+    )
+  }
+
+  path <- gsub('"', "", trimws(path), fixed = TRUE)
+
+  if (!file.exists(path) || dir.exists(path)) {
+    stop(
+      paste("Arquivo não encontrado:", path),
+      call. = FALSE
+    )
+  }
+
+  if (!(tolower(tools::file_ext(path)) %in% extensions)) {
+    stop(
+      paste("Formato de arquivo inválido:", label),
+      call. = FALSE
+    )
+  }
+
+  normalizePath(
+    path,
+    winslash = "/",
+    mustWork = TRUE
+  )
+}
 
 
-reconciliation_table <- function(data) {
+bc_positions_table <- function(positions) {
+  data <- positions |>
+    dplyr::transmute(
+      Fundo = .data$xp_asset_name,
+      Identificador = .data$daycoval_title,
+      `Cotas XP` = .data$xp_quantity,
+      `Cotas Daycoval` = .data$daycoval_quantity,
+      `Dif. cotas` = .data$quantity_difference,
+      `Financeiro XP` = .data$xp_market_value,
+      `Financeiro Daycoval` = .data$daycoval_market_value,
+      `Dif. financeira` = .data$market_value_difference,
+      Situação = .data$status
+    )
+
   DT::datatable(
     data,
     rownames = FALSE,
-    filter = "top",
     class = "stripe hover compact",
     options = list(
-      pageLength = 20,
+      pageLength = 25,
       scrollX = TRUE,
       autoWidth = TRUE,
+      order = list(),
       language = list(
         search = "Buscar:",
         lengthMenu = "Mostrar _MENU_ registros",
@@ -24,619 +77,336 @@ reconciliation_table <- function(data) {
         )
       )
     )
-  )
-}
-
-
-
-reconciliation_metric <- function(label, value) {
-  shiny::div(
-    class = "bc-metric",
-    shiny::div(class = "bc-metric-label", label),
-    shiny::div(class = "bc-metric-value", value)
-  )
-}
-
-
-local_report_path <- function(path, label) {
-  if (
-    is.null(path) ||
-    length(path) != 1L ||
-    is.na(path) ||
-    !nzchar(trimws(path))
-  ) {
-    stop(
-      paste("Informe o caminho de:", label),
-      call. = FALSE
+  ) |>
+    DT::formatRound(
+      columns = c(
+        "Cotas XP",
+        "Cotas Daycoval",
+        "Dif. cotas"
+      ),
+      digits = 4,
+      mark = ".",
+      dec.mark = ","
+    ) |>
+    DT::formatCurrency(
+      columns = c(
+        "Financeiro XP",
+        "Financeiro Daycoval",
+        "Dif. financeira"
+      ),
+      currency = "R$ ",
+      digits = 2,
+      mark = ".",
+      dec.mark = ","
     )
-  }
-
-  path <- trimws(path)
-  path <- gsub('"', "", path, fixed = TRUE)
-
-  if (!file.exists(path) || dir.exists(path)) {
-    stop(
-      paste("Arquivo não encontrado:", path),
-      call. = FALSE
-    )
-  }
-
-  path
 }
 
 
-
-ui <- shiny::fluidPage(
+ui <- shiny::navbarPage(
+  title = "Bater Cota",
+  id = "page",
   theme = bslib::bs_theme(
     version = 5,
     bootswatch = "flatly"
   ),
-  shiny::tags$head(
-    shiny::tags$style(shiny::HTML("
-      body {
-        background: #f7f8fa;
-      }
 
-      .container-fluid {
-        max-width: 1600px;
-      }
+  shiny::tabPanel(
+    "Ativos",
+    shiny::br(),
+    shiny::h3("Conciliação de ativos"),
+    shiny::p(
+      "Comparação das posições financeiras entre XP e Daycoval."
+    ),
 
-      .bc-header {
-        margin: 22px 0;
-      }
+    shiny::sidebarLayout(
+      shiny::sidebarPanel(
+        width = 3,
 
-      .bc-subtitle {
-        color: #667085;
-        margin-bottom: 16px;
-      }
+        shiny::selectInput(
+          "fund",
+          "Fundo",
+          choices = c(
+            "Long Term LB FIM" = "long_term",
+            "Linear FIM CP RL" = "linear"
+          )
+        ),
 
-      .bc-metrics {
-        display: grid;
-        grid-template-columns: repeat(
-          auto-fit,
-          minmax(155px, 1fr)
-        );
-        gap: 12px;
-        margin-bottom: 20px;
-      }
+        shiny::textInput(
+          "portfolio_path",
+          "Daycoval - Carteira Diária (CSV)",
+          placeholder = "Cole o caminho completo"
+        ),
 
-      .bc-metric {
-        background: white;
-        border: 1px solid #e4e7ec;
-        border-radius: 10px;
-        padding: 16px;
-      }
+        shiny::textInput(
+          "position_path",
+          "Daycoval - Posição C (CSV)",
+          placeholder = "Cole o caminho completo"
+        ),
 
-      .bc-metric-label {
-        font-size: 12px;
-        color: #667085;
-      }
+        shiny::textInput(
+          "xp_path",
+          "XP - Extrato (PDF)",
+          placeholder = "Cole o caminho completo"
+        ),
 
-      .bc-metric-value {
-        font-size: 26px;
-        font-weight: 700;
-        margin-top: 5px;
-      }
+        shiny::numericInput(
+          "financial_tolerance",
+          "Tolerância por ativo (R$)",
+          value = 100,
+          min = 0,
+          step = 10
+        ),
 
-      .bc-note {
-        color: #667085;
-        font-size: 13px;
-        margin: 12px 0;
-      }
+        shiny::actionButton(
+          "analyze",
+          "Conciliar ativos",
+          class = "btn-primary",
+          width = "100%"
+        )
+      ),
 
-      .bc-panel {
-        background: white;
-        border: 1px solid #e4e7ec;
-        border-radius: 10px;
-        padding: 16px;
-        margin-top: 16px;
-      }
+      shiny::mainPanel(
+        width = 9,
 
-      .dataTables_wrapper {
-        font-size: 12px;
-      }
+        shiny::uiOutput("status"),
+        shiny::uiOutput("summary"),
 
-      table.dataTable thead th {
-        white-space: nowrap;
-      }
-    "))
-  ),
-  shiny::div(
-    class = "bc-header",
-    shiny::h2("Bater Cota"),
-    shiny::div(
-      class = "bc-subtitle",
-      "Conciliação de posições entre XP e Daycoval"
+        DT::DTOutput("positions_table"),
+
+        shiny::br(),
+
+        shiny::uiOutput("issues"),
+
+        shiny::p(
+          class = "text-muted",
+          style = "font-size: 12px;",
+          paste(
+            "Quantidades exibidas com quatro casas decimais.",
+            "Valores financeiros exibidos em reais.",
+            "Os valores originais permanecem preservados."
+          )
+        )
+      )
     )
   ),
-  shiny::sidebarLayout(
-    shiny::sidebarPanel(
-      width = 3,
-      shiny::h4("Relatórios"),
-      shiny::selectInput(
-        "fund",
-        "Fundo",
-        choices = c(
-          "Long Term LB FIM" = "long_term",
-          "Linear FIM CP RL" = "linear"
-        )
-      ),
 
-      shiny::numericInput(
-        "financial_tolerance",
-        "Tolerância financeira por ativo (R$)",
-        value = 100,
-        min = 0,
-        step = 10,
-        width = "100%"
-      ),
+  shiny::tabPanel(
+    "Variação da cota",
+    shiny::br(),
+    shiny::h3("Variação projetada da cota"),
+    shiny::p(
+      "Em desenvolvimento.",
+      "Esta página utilizará as posições anteriores,",
+      "os componentes patrimoniais e os fluxos do fundo",
+      "para conferir a variação da cota."
+    )
+  ),
 
-      shiny::textInput(
-        "portfolio_path",
-        "Daycoval — Carteira Diária (CSV)",
-        placeholder = "Cole o caminho completo do CSV",
-        width = "100%"
-      ),
-
-      shiny::textInput(
-        "position_path",
-        "Daycoval — Posição de Carteira C (CSV)",
-        placeholder = "Cole o caminho completo do CSV",
-        width = "100%"
-      ),
-
-      shiny::textInput(
-        "xp_path",
-        "XP — Extrato consolidado (PDF)",
-        placeholder = "Cole o caminho completo do PDF",
-        width = "100%"
-      ),
-
-      shiny::tags$hr(),
-
-      shiny::textInput(
-        "operations_path",
-        "Operações (Excel, opcional)",
-        placeholder = "Cole o caminho completo do XLSX",
-        width = "100%"
-      ),
-
-      shiny::div(
-        class = "bc-note",
-        paste(
-          "Para comparar datas, carregue primeiro a posição",
-          "anterior e depois a posição mais recente do mesmo fundo.",
-          "A planilha de operações permite associar movimentações."
-        )
-      ),
-      shiny::actionButton(
-        "analyze",
-        "Conciliar ativos",
-        class = "btn-primary",
-        width = "100%"
-      )
-    ),
-    shiny::mainPanel(
-      width = 9,
-      shiny::uiOutput("status"),
-      shiny::uiOutput("metrics"),
-      shiny::tabsetPanel(
-        shiny::tabPanel(
-          "Posições",
-          shiny::div(
-            class = "bc-panel",
-            shiny::p(
-              "Comparação das quantidades e valores financeiros",
-              "informados pelas duas fontes."
-            ),
-            DT::DTOutput("positions_table")
-          )
-        ),
-        shiny::tabPanel(
-          "Exceções",
-          shiny::div(
-            class = "bc-panel",
-            shiny::p(
-              "Inclui posições não associadas, inconsistências",
-              "internas e exceções previamente conhecidas."
-            ),
-            DT::DTOutput("issues_table")
-          )
-        ),
-        shiny::tabPanel(
-          "Evolução",
-          shiny::div(
-            class = "bc-panel",
-            shiny::uiOutput("temporal_status"),
-            DT::DTOutput("changes_table")
-          )
-        ),
-        shiny::tabPanel(
-          "Operações",
-          shiny::div(
-            class = "bc-panel",
-            shiny::p(
-              "Operações associadas à variação entre as datas.",
-              "Uma associação não comprova reconciliação quantitativa."
-            ),
-            DT::DTOutput("operations_table")
-          )
-        ),
-        shiny::tabPanel(
-          "Daycoval interno",
-          shiny::div(
-            class = "bc-panel",
-            shiny::uiOutput("internal_summary"),
-            DT::DTOutput("internal_table")
-          )
-        )
-      )
+  shiny::tabPanel(
+    "Aplicações e resgates",
+    shiny::br(),
+    shiny::h3("Aplicações e resgates"),
+    shiny::p(
+      "Em desenvolvimento.",
+      "Esta página conciliará as movimentações,",
+      "as datas de cotização e as liquidações financeiras."
     )
   )
 )
 
 
 server <- function(input, output, session) {
-  current <- shiny::reactiveVal(NULL)
-  previous <- shiny::reactiveVal(NULL)
-  operations_state <- shiny::reactiveVal(NULL)
-  temporal <- shiny::reactiveVal(NULL)
-
+  analysis <- shiny::reactiveVal(NULL)
   read_error <- shiny::reactiveVal(NULL)
-  temporal_error <- shiny::reactiveVal(NULL)
 
-  shiny::observeEvent(
-    input$analyze,
-    {
-      tryCatch(
-        {
+  shiny::observeEvent(input$analyze, {
+    analysis(NULL)
+    read_error(NULL)
 
-          portfolio_path <- local_report_path(
-            input$portfolio_path,
-            "Carteira Diária"
-          )
+    tryCatch(
+      {
+        portfolio_path <- bc_report_path(
+          input$portfolio_path,
+          "Carteira Diária",
+          "csv"
+        )
 
-          position_path <- local_report_path(
-            input$position_path,
-            "Posição de Carteira C"
-          )
+        position_path <- bc_report_path(
+          input$position_path,
+          "Posição C",
+          "csv"
+        )
 
-          xp_path <- local_report_path(
-            input$xp_path,
-            "Extrato XP"
-          )
+        xp_path <- bc_report_path(
+          input$xp_path,
+          "Extrato XP",
+          "pdf"
+        )
 
-          portfolio <- batercota::read_daycoval_portfolio(
-            path = portfolio_path,
-            source_name = basename(portfolio_path)
-          )
+        portfolio <- batercota::read_daycoval_portfolio(
+          path = portfolio_path,
+          source_name = basename(portfolio_path)
+        )
 
-          position <- batercota::read_daycoval_position(
-            path = position_path,
-            source_name = basename(position_path)
-          )
+        position <- batercota::read_daycoval_position(
+          path = position_path,
+          source_name = basename(position_path)
+        )
 
-          xp <- batercota::read_xp_statement(
-            path = xp_path,
-            source_name = basename(xp_path)
-          )
+        xp <- batercota::read_xp_statement(
+          path = xp_path,
+          source_name = basename(xp_path)
+        )
 
+        view <- batercota:::build_reconciliation_screen(
+          portfolio = portfolio,
+          position = position,
+          xp = xp,
+          fund = input$fund,
+          financial_tolerance = input$financial_tolerance
+        )
 
-          view <- batercota:::build_reconciliation_screen(
-            portfolio = portfolio,
-            position = position,
-            xp = xp,
-            fund = input$fund,
-            financial_tolerance = input$financial_tolerance
-          )
-
-
-          new_operations <- operations_state()
-
-          if (nzchar(trimws(input$operations_path))) {
-            operations_path <- local_report_path(
-              input$operations_path,
-              "Planilha de operações"
-            )
-
-            new_operations <- batercota::read_fund_operations(
-              path = operations_path,
-              source_name = basename(operations_path)
-            )
-          }
-
-
-          snapshot <- list(
-            fund = input$fund,
-            date = view$metadata$position_date,
-            position = position,
-            view = view
-          )
-
-          old <- current()
-
-          if (
-            !is.null(old) &&
-            identical(old$fund, snapshot$fund) &&
-            old$date < snapshot$date
-          ) {
-            new_previous <- old
-          } else if (
-            !is.null(old) &&
-            identical(old$fund, snapshot$fund) &&
-            identical(old$date, snapshot$date)
-          ) {
-            new_previous <- previous()
-          } else {
-            new_previous <- NULL
-          }
-
-          new_temporal <- NULL
-          new_temporal_error <- NULL
-
-          if (
-            !is.null(new_previous) &&
-            !is.null(new_operations)
-          ) {
-            new_temporal <- tryCatch(
-              batercota::reconcile_position_changes(
-                previous = new_previous$view$external,
-                current = snapshot$view$external,
-                operations = new_operations,
-                previous_position = new_previous$position,
-                current_position = snapshot$position
-              ),
-              error = function(error) {
-                new_temporal_error <<- conditionMessage(error)
-                NULL
-              }
-            )
-          }
-
-          previous(new_previous)
-          current(snapshot)
-          operations_state(new_operations)
-          temporal(new_temporal)
-
-          read_error(NULL)
-          temporal_error(new_temporal_error)
-        },
-        error = function(error) {
-          read_error(conditionMessage(error))
-        }
-      )
-    },
-    ignoreInit = TRUE
-  )
+        analysis(view)
+      },
+      error = function(error) {
+        read_error(conditionMessage(error))
+      }
+    )
+  })
 
   output$status <- shiny::renderUI({
-    message <- read_error()
+    error <- read_error()
 
-    if (!is.null(message)) {
-      return(
-        shiny::div(
-          class = "alert alert-danger",
-          message
-        )
-      )
+    if (!is.null(error)) {
+      return(shiny::div(
+        class = "alert alert-danger",
+        error
+      ))
     }
 
-    snapshot <- current()
+    view <- analysis()
 
-    if (is.null(snapshot)) {
-      return(
-        shiny::div(
-          class = "alert alert-info",
-          "Selecione o fundo e carregue os relatórios para começar."
-        )
-      )
+    if (is.null(view)) {
+      return(shiny::p(
+        class = "text-muted",
+        "Informe os três relatórios para iniciar."
+      ))
     }
 
-    shiny::div(
-      class = "alert alert-light",
-      shiny::strong(snapshot$view$metadata$fund_name),
-      " — Data-base: ",
-      format(snapshot$date, "%d/%m/%Y")
+    shiny::tags$p(
+      shiny::strong(view$metadata$fund_name),
+      " | Data-base: ",
+      format(view$metadata$position_date, "%d/%m/%Y")
     )
   })
 
+  output$summary <- shiny::renderUI({
+    view <- analysis()
+    shiny::req(view)
 
-  output$metrics <- shiny::renderUI({
-    snapshot <- current()
-    shiny::req(snapshot)
+    integer_label <- scales::label_number(
+      accuracy = 1,
+      big.mark = ".",
+      decimal.mark = ","
+    )
 
-    positions <- snapshot$view$positions
-    summary <- snapshot$view$external$summary
+    money_label <- scales::label_dollar(
+      accuracy = 0.01,
+      prefix = "R$ ",
+      big.mark = ".",
+      decimal.mark = ","
+    )
 
-    financial_status <- positions$status
+    statuses <- view$positions$status
+    summary <- view$external$summary
 
-    shiny::div(
-      class = "bc-metrics",
-      reconciliation_metric(
-        "Ativos associados",
-        nrow(positions)
-      ),
-      reconciliation_metric(
-        "Conformes",
-        sum(financial_status %in% c("OK", "Tolerada"))
-      ),
-      reconciliation_metric(
-        "Diferenças toleradas",
-        sum(financial_status == "Tolerada")
-      ),
-      reconciliation_metric(
-        "Divergentes",
-        sum(financial_status == "Divergente")
-      ),
-      reconciliation_metric(
-        "Não associados",
-        summary$unmatched_xp[[1L]] +
-          summary$unmatched_daycoval[[1L]]
-      ),
-      reconciliation_metric(
-        "Exceções conhecidas",
-        summary$expected_daycoval_only[[1L]]
-      ),
-      reconciliation_metric(
-        "Pendências internas",
-        nrow(snapshot$view$internal$issues)
+    conforming <- sum(statuses %in% c("OK", "Tolerada"))
+    divergent <- sum(statuses == "Divergente")
+    not_evaluated <- sum(statuses == "Não avaliado")
+
+    unmatched <- summary$unmatched_xp[[1L]] +
+      summary$unmatched_daycoval[[1L]]
+
+    shiny::tags$p(
+      shiny::strong("Ativos: "),
+      integer_label(nrow(view$positions)),
+      "  |  ",
+      shiny::strong("Conformes: "),
+      integer_label(conforming),
+      "  |  ",
+      shiny::strong("Divergentes: "),
+      integer_label(divergent),
+      "  |  ",
+      shiny::strong("Não associados: "),
+      integer_label(unmatched),
+      "  |  ",
+      shiny::strong("Não avaliados: "),
+      integer_label(not_evaluated),
+      shiny::tags$br(),
+      shiny::tags$small(
+        class = "text-muted",
+        "Tolerância financeira por ativo: ",
+        money_label(view$metadata$financial_tolerance)
       )
     )
   })
-
 
   output$positions_table <- DT::renderDT({
-    snapshot <- current()
-    shiny::req(snapshot)
+    view <- analysis()
+    shiny::req(view)
 
-    data <- snapshot$view$positions |>
-      dplyr::transmute(
-        Ativo = .data$xp_asset_name,
-        Identificador = .data$daycoval_title,
-        `Qtd XP` = .data$xp_quantity,
-        `Qtd Daycoval` = .data$daycoval_quantity,
-        `Dif. cotas` = .data$quantity_difference,
-        `Valor XP` = .data$xp_market_value,
-        `Valor Daycoval` = .data$daycoval_market_value,
-        `Dif. financeira` = .data$market_value_difference,
-        Situação = .data$status
-      )
+    bc_positions_table(view$positions)
+  }, server = FALSE)
 
-    reconciliation_table(data)
-  })
+  output$issues <- shiny::renderUI({
+    view <- analysis()
+    shiny::req(view)
 
-  output$issues_table <- DT::renderDT({
-    snapshot <- current()
-    shiny::req(snapshot)
+    external_issues <- view$external$issues
 
-    data <- snapshot$view$issues |>
-      dplyr::transmute(
-        Origem = .data$origin,
-        Tipo = .data$issue_type,
-        Ativo = .data$asset_identifier,
-        Arquivo = .data$source_file,
-        Linha = .data$source_line
-      )
-
-    reconciliation_table(data)
-  })
-
-  output$internal_summary <- shiny::renderUI({
-    snapshot <- current()
-    shiny::req(snapshot)
-
-    summary <- snapshot$view$internal$summary
-
-    shiny::p(
-      "Ativos associados: ", summary$matched[[1L]],
-      " | Iguais: ", summary$matched_equal[[1L]],
-      " | Diferentes: ", summary$matched_different[[1L]],
-      " | Pendências: ", nrow(snapshot$view$internal$issues)
-    )
-  })
-
-  output$internal_table <- DT::renderDT({
-    snapshot <- current()
-    shiny::req(snapshot)
-
-    data <- snapshot$view$internal$checks |>
-      dplyr::transmute(
-        Associação = .data$match_id,
-        Campo = .data$field,
-        Daycoval_Carteira = .data$portfolio_value,
-        Daycoval_Posicao_C = .data$position_value,
-        Diferença = .data$difference,
-        Situação = .data$status
-      )
-
-    reconciliation_table(data)
-  })
-
-  output$temporal_status <- shiny::renderUI({
-    snapshot <- current()
-    shiny::req(snapshot)
-
-    if (is.null(previous())) {
-      return(shiny::p(
-        "Carregue uma data posterior do mesmo fundo",
-        "para visualizar a evolução das posições."
-      ))
-    }
-
-    if (!is.null(temporal_error())) {
-      return(
-        shiny::div(
-          class = "alert alert-warning",
-          temporal_error()
+    unmatched <- external_issues |>
+      dplyr::filter(
+        .data$issue_type %in% c(
+          "unmatched_xp",
+          "unmatched_daycoval"
         )
       )
+
+    internal_count <- nrow(view$internal$issues)
+
+    messages <- list()
+
+    if (nrow(unmatched) > 0L) {
+      messages <- c(
+        messages,
+        list(shiny::tags$p(
+          shiny::strong("Ativos não associados: "),
+          paste(
+            unmatched$asset_identifier,
+            collapse = "; "
+          )
+        ))
+      )
     }
 
-    if (is.null(operations_state())) {
-      return(shiny::p(
-        "A comparação temporal está disponível quando",
-        "a planilha de operações for carregada."
-      ))
+    if (internal_count > 0L) {
+      messages <- c(
+        messages,
+        list(shiny::tags$p(
+          shiny::strong("Pendências Daycoval interno: "),
+          internal_count
+        ))
+      )
     }
 
-    shiny::p(
-      "Período: ",
-      format(previous()$date, "%d/%m/%Y"),
-      " até ",
-      format(snapshot$date, "%d/%m/%Y")
+    if (length(messages) == 0L) {
+      return(NULL)
+    }
+
+    shiny::div(
+      class = "alert alert-warning",
+      messages
     )
-  })
-
-  output$changes_table <- DT::renderDT({
-    result <- temporal()
-
-    shiny::req(result)
-
-    data <- result$changes |>
-      dplyr::transmute(
-        Identificador = .data$daycoval_title,
-        Situação = dplyr::recode(
-          .data$change_type,
-          held = "Mantido",
-          entered = "Entrada",
-          exited = "Saída",
-          unverified_entry = "Entrada não confirmada",
-          unverified_exit = "Saída não confirmada"
-        ),
-        `Var. cotas XP` = .data$xp_quantity_change,
-        `Var. cotas Daycoval` =
-          .data$daycoval_quantity_change,
-        `Var. financeira XP` =
-          .data$xp_market_value_change,
-        `Var. financeira Daycoval` =
-          .data$daycoval_market_value_change,
-        Operações = .data$n_conversions,
-        Avaliação = .data$operation_status
-      )
-
-    reconciliation_table(data)
-  })
-
-  output$operations_table <- DT::renderDT({
-    result <- temporal()
-
-    shiny::req(result)
-
-    data <- result$links |>
-      dplyr::transmute(
-        Identificador = .data$daycoval_title,
-        Operação = .data$operation_type,
-        Solicitação = .data$operation_date,
-        Cotização = .data$conversion_date,
-        Liquidação = .data$liquidation_date,
-        Valor = .data$value,
-        Quantidade = .data$quantity,
-        `Quantidade assinada` = .data$signed_quantity,
-        Arquivo = .data$source_file,
-        Linha = .data$source_row
-      )
-
-    reconciliation_table(data)
   })
 }
 
@@ -645,4 +415,5 @@ shiny::shinyApp(
   ui = ui,
   server = server
 )
+
 
