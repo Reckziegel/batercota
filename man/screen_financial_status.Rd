@@ -5,6 +5,8 @@
 \title{Classify financial reconciliation differences}
 \usage{
 screen_financial_status(difference, tolerance = 100)
+
+screen_financial_status(difference, tolerance = 100)
 }
 \arguments{
 \item{difference}{Numeric vector of financial differences.}
@@ -13,8 +15,14 @@ screen_financial_status(difference, tolerance = 100)
 }
 \value{
 Character vector of financial statuses.
+
+Character vector of financial statuses.
 }
 \description{
+A financial difference is evaluated in integer cents.
+Quantity differences are preserved separately and do not
+determine the operational reconciliation status.
+
 A financial difference is evaluated in integer cents.
 Quantity differences are preserved separately and do not
 determine the operational reconciliation status.

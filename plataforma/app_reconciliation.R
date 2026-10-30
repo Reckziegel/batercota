@@ -281,7 +281,8 @@ ui <- shiny::navbarPage(
           "Fundo",
           choices = c(
             "Long Term LB FIM" = "long_term",
-            "Linear FIM CP RL" = "linear"
+            "Linear FIM CP RL" = "linear",
+            "Reta Alocação FIF" = "reta_alocacao"
           )
         ),
 
