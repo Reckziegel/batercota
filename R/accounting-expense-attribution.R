@@ -302,7 +302,7 @@ reconcile_portfolio_return <- function(
     n_expense_issues = nrow(expense_issues)
   )
 
-  structure(
+  reconciliation <- structure(
     list(
       metadata = list(
         codigo_carteira =
@@ -323,6 +323,8 @@ reconcile_portfolio_return <- function(
     ),
     class = "portfolio_return_reconciliation"
   )
+
+  return_reconciliation_add_partial(reconciliation)
 }
 
 

@@ -5,6 +5,19 @@
 # devtools::load_all(".")
 # shiny::runApp("plataforma/app_reconciliation.R")
 
+
+module_path <- file.path(
+  "plataforma",
+  "mod_fluxos_passivos.R"
+)
+
+if (!file.exists(module_path)) {
+  module_path <- "mod_fluxos_passivos.R"
+}
+
+source(module_path, local = TRUE)
+
+
 bc_report_path <- function(path, label, extensions) {
   if (
     !is.character(path) ||
@@ -133,31 +146,41 @@ bc_component_name <- function(x) {
 }
 
 
+
 bc_return_components_table <- function(components) {
   data <- components |>
     dplyr::transmute(
       Componente = bc_component_name(.data$component),
-      `Resultado (R$)` = .data$estimated_result,
-      `Contribuição (p.p.)` = .data$contribution_pp,
+      `Resultado identificado (R$)` =
+        .data$partial_estimated_result,
+      `Contribuição identificada (p.p.)` =
+        .data$partial_contribution_pp,
       `Posições/contas` = .data$n_positions,
-      `Não estimadas` = .data$n_unestimated
+      Estimadas = .data$n_estimated,
+      `Não estimadas` = .data$n_unestimated,
+      Situação = dplyr::case_when(
+        .data$estimate_status == "complete" ~ "Completo",
+        .data$estimate_status == "partial" ~ "Parcial",
+        TRUE ~ "Não estimado"
+      )
     )
 
   bc_table(data, page_length = 10L) |>
     DT::formatCurrency(
-      columns = "Resultado (R$)",
+      columns = "Resultado identificado (R$)",
       currency = "R$ ",
       digits = 2,
       mark = ".",
       dec.mark = ","
     ) |>
     DT::formatRound(
-      columns = "Contribuição (p.p.)",
+      columns = "Contribuição identificada (p.p.)",
       digits = 6,
       mark = ".",
       dec.mark = ","
     )
 }
+
 
 
 bc_return_detail_rows <- function(reconciliation) {
@@ -409,6 +432,7 @@ ui <- shiny::navbarPage(
 
         shiny::uiOutput("return_status"),
         shiny::uiOutput("return_summary"),
+        shiny::uiOutput("return_asset_warnings"),
 
         shiny::h4("Contribuição por componente"),
         DT::DTOutput("return_components_table"),
@@ -446,16 +470,12 @@ ui <- shiny::navbarPage(
     )
   ),
 
+
   shiny::tabPanel(
-    "Aplicações e resgates",
-    shiny::br(),
-    shiny::h3("Aplicações e resgates"),
-    shiny::p(
-      "Em desenvolvimento.",
-      "Esta página conciliará as movimentações,",
-      "as datas de cotização e as liquidações financeiras."
-    )
+    "Fluxos e Passivos",
+    mod_fluxos_passivos_ui("fluxos_passivos")
   )
+
 )
 
 
@@ -465,10 +485,35 @@ server <- function(input, output, session) {
 
   # Shared current-date reports.
   current_reports <- shiny::reactiveVal(NULL)
+  selected_fund <- shiny::reactive(input$fund)
+
+  fluxos_passivos_reports <- mod_fluxos_passivos_server(
+    id = "fluxos_passivos",
+    selected_fund = selected_fund,
+    current_reports = current_reports
+  )
 
   # Return reconciliation is independent of the assets screen.
   return_analysis <- shiny::reactiveVal(NULL)
   return_error <- shiny::reactiveVal(NULL)
+  shiny::observeEvent(
+    input$fund,
+    {
+      reports <- current_reports()
+
+      if (
+        !is.null(reports) &&
+        !identical(reports$fund, input$fund)
+      ) {
+        current_reports(NULL)
+        analysis(NULL)
+        read_error(NULL)
+        return_analysis(NULL)
+        return_error(NULL)
+      }
+    },
+    ignoreInit = TRUE
+  )
 
   shiny::observeEvent(input$analyze, {
     analysis(NULL)
@@ -790,13 +835,41 @@ server <- function(input, output, session) {
     )
   })
 
+
   output$return_summary <- shiny::renderUI({
     result <- return_analysis()
     shiny::req(result)
 
     summary <- result$reconciliation$summary
 
-    status <- switch(
+    show_money <- function(value) {
+      if (length(value) != 1L || !is.finite(value)) {
+        return("Não disponível")
+      }
+
+      bc_money(value)
+    }
+
+    show_percent <- function(value) {
+      if (length(value) != 1L || !is.finite(value)) {
+        return("Não disponível")
+      }
+
+      paste0(bc_percent(value), "%")
+    }
+
+    show_pp <- function(value) {
+      if (length(value) != 1L || !is.finite(value)) {
+        return("Não disponível")
+      }
+
+      paste0(bc_percent(value), " p.p.")
+    }
+
+    incomplete <- summary$estimate_completeness[[1L]] ==
+      "incomplete"
+
+    comparison_status <- switch(
       summary$comparison_status[[1L]],
       within_tolerance = "Dentro da tolerância",
       outside_tolerance = "Fora da tolerância",
@@ -805,37 +878,104 @@ server <- function(input, output, session) {
     )
 
     shiny::tagList(
-      shiny::tags$h4("Resumo da rentabilidade"),
+      shiny::h4("Resumo da rentabilidade"),
+
+      if (incomplete) {
+        shiny::div(
+          class = "alert alert-warning",
+          shiny::strong("Estimativa parcial"),
+          shiny::tags$p(
+            paste(
+              "Existem posições sem contribuição estimada.",
+              "O resultado identificado é informativo",
+              "e não representa uma conciliação aprovada."
+            )
+          )
+        )
+      },
 
       shiny::tags$p(
-        shiny::strong("Rentabilidade estimada: "),
-        bc_percent(summary$estimated_return_percent),
-        "%",
+        shiny::strong(
+          if (incomplete) {
+            "Rentabilidade parcial estimada: "
+          } else {
+            "Rentabilidade estimada: "
+          }
+        ),
+        show_percent(
+          summary$partial_estimated_return_percent
+        ),
         "  |  ",
         shiny::strong("Rentabilidade Daycoval: "),
-        bc_percent(summary$reported_return_percent),
-        "%"
+        show_percent(summary$reported_return_percent)
       ),
 
       shiny::tags$p(
-        shiny::strong("Diferença: "),
-        bc_percent(summary$difference_pp),
-        " p.p.",
+        shiny::strong(
+          if (incomplete) {
+            "Diferença indicativa: "
+          } else {
+            "Diferença: "
+          }
+        ),
+        show_pp(summary$partial_difference_pp),
         "  |  ",
         shiny::strong("Tolerância: "),
-        bc_percent(summary$tolerance_pp),
-        " p.p.",
+        show_pp(summary$tolerance_pp),
         "  |  ",
         shiny::strong("Resultado: "),
-        status
+        comparison_status
       ),
 
       shiny::tags$p(
-        shiny::strong("Resultado financeiro estimado: "),
-        bc_money(summary$estimated_result),
+        shiny::strong("Resultado financeiro identificado: "),
+        show_money(summary$partial_estimated_result),
         "  |  ",
-        shiny::strong("Residual: "),
-        bc_money(summary$residual_brl)
+        shiny::strong(
+          if (incomplete) {
+            "Residual indicativo: "
+          } else {
+            "Residual: "
+          }
+        ),
+        show_money(summary$partial_residual_brl)
+      ),
+
+      shiny::tags$hr(),
+
+      shiny::h5("Cobertura da estimativa"),
+
+      shiny::tags$p(
+        shiny::strong("Posições/contas estimadas: "),
+        summary$n_estimated,
+        " de ",
+        summary$n_positions,
+        " (",
+        show_percent(summary$position_coverage_percent),
+        ")"
+      ),
+
+      shiny::tags$p(
+        shiny::strong("Cobertura dos investimentos iniciais: "),
+        show_percent(
+          summary$opening_investment_coverage_percent
+        ),
+        "  |  ",
+        shiny::strong("Valor inicial coberto: "),
+        show_money(
+          summary$covered_opening_investment_value
+        )
+      ),
+
+      shiny::tags$p(
+        class = "text-muted",
+        style = "font-size: 12px;",
+        paste(
+          "A cobertura financeira considera fundos investidos,",
+          "renda fixa e ações com valor inicial identificável.",
+          "Não inclui caixa, despesas ou exposição nocional",
+          "a contratos futuros."
+        )
       ),
 
       shiny::tags$p(
@@ -847,11 +987,10 @@ server <- function(input, output, session) {
         "  |  ",
         shiny::strong("Modelo: "),
         "Cobertura parcial"
-      ),
-
-      shiny::tags$hr()
+      )
     )
   })
+
 
   output$return_components_table <- DT::renderDT({
     result <- return_analysis()
@@ -932,6 +1071,65 @@ server <- function(input, output, session) {
       result$flows
     )
   }, server = FALSE)
+
+
+  output$return_asset_warnings <- shiny::renderUI({
+    result <- return_analysis()
+    view <- analysis()
+
+    if (is.null(result) || is.null(view)) {
+      return(NULL)
+    }
+
+    metadata <- result$reconciliation$metadata
+
+    same_fund <- identical(
+      view$metadata$portfolio_code,
+      metadata$codigo_carteira
+    )
+
+    same_date <- identical(
+      view$metadata$position_date,
+      metadata$current_date
+    )
+
+    if (!same_fund || !same_date) {
+      return(NULL)
+    }
+
+    unmatched <- view$external$issues |>
+      dplyr::filter(
+        .data$issue_type %in% c(
+          "unmatched_xp",
+          "unmatched_daycoval"
+        )
+      )
+
+    if (nrow(unmatched) == 0L) {
+      return(NULL)
+    }
+
+    identifiers <- unique(
+      unmatched$asset_identifier[
+        !is.na(unmatched$asset_identifier)
+      ]
+    )
+
+    shiny::div(
+      class = "alert alert-warning",
+      shiny::strong("Ativos não associados: "),
+      paste(identifiers, collapse = "; "),
+      shiny::tags$p(
+        paste(
+          "Verifique as diferenças entre XP e Daycoval.",
+          "A identificação de um ativo não associado",
+          "não impede a estimativa parcial,",
+          "mas exige revisão da carteira."
+        )
+      )
+    )
+  })
+
 }
 
 
