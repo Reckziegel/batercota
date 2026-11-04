@@ -314,18 +314,21 @@ ui <- shiny::navbarPage(
           "Daycoval - Carteira Diária (CSV)",
           placeholder = "Cole o caminho completo"
         ),
+        bc_library_picker_ui("portfolio_path"),
 
         shiny::textInput(
           "position_path",
           "Daycoval - Posição C (CSV)",
           placeholder = "Cole o caminho completo"
         ),
+        bc_library_picker_ui("position_path"),
 
         shiny::textInput(
           "xp_path",
           "XP - Extrato (PDF)",
           placeholder = "Cole o caminho completo"
         ),
+        bc_library_picker_ui("xp_path"),
 
         shiny::numericInput(
           "financial_tolerance",
@@ -392,12 +395,14 @@ ui <- shiny::navbarPage(
           "Daycoval - Carteira Diária anterior (CSV)",
           placeholder = "Cole o caminho completo"
         ),
+        bc_library_picker_ui("previous_portfolio_path"),
 
         shiny::textInput(
           "previous_position_path",
           "Daycoval - Posição C anterior (CSV)",
           placeholder = "Cole o caminho completo"
         ),
+        bc_library_picker_ui("previous_position_path"),
 
         shiny::numericInput(
           "return_tolerance",
@@ -487,10 +492,29 @@ server <- function(input, output, session) {
   current_reports <- shiny::reactiveVal(NULL)
   selected_fund <- shiny::reactive(input$fund)
 
+  library_revision <- shiny::reactiveVal(0L)
+
+  bc_library_bind_pickers(
+    input = input,
+    session = session,
+    selected_fund = selected_fund,
+    revision = library_revision,
+    specs = c(
+      portfolio_path = "daycoval_portfolio",
+      position_path = "daycoval_position",
+      xp_path = "xp_statement",
+      previous_portfolio_path = "daycoval_portfolio",
+      previous_position_path = "daycoval_position"
+    )
+  )
+
+
   fluxos_passivos_reports <- mod_fluxos_passivos_server(
     id = "fluxos_passivos",
     selected_fund = selected_fund,
-    current_reports = current_reports
+    current_reports = current_reports,
+    library_revision = library_revision,
+    library_enabled = TRUE
   )
 
   # Return reconciliation is independent of the assets screen.
@@ -514,6 +538,7 @@ server <- function(input, output, session) {
     },
     ignoreInit = TRUE
   )
+
 
   shiny::observeEvent(input$analyze, {
     analysis(NULL)
@@ -543,19 +568,19 @@ server <- function(input, output, session) {
           "pdf"
         )
 
-        portfolio <- batercota::read_daycoval_portfolio(
+        portfolio <- bc_library_read(
           path = portfolio_path,
-          source_name = basename(portfolio_path)
+          report_type = "daycoval_portfolio"
         )
 
-        position <- batercota::read_daycoval_position(
+        position <- bc_library_read(
           path = position_path,
-          source_name = basename(position_path)
+          report_type = "daycoval_position"
         )
 
-        xp <- batercota::read_xp_statement(
+        xp <- bc_library_read(
           path = xp_path,
-          source_name = basename(xp_path)
+          report_type = "xp_statement"
         )
 
         view <- batercota:::build_reconciliation_screen(
@@ -564,6 +589,15 @@ server <- function(input, output, session) {
           xp = xp,
           fund = input$fund,
           financial_tolerance = input$financial_tolerance
+        )
+
+        bc_library_register_imports(
+          paths = c(
+            portfolio_path,
+            position_path,
+            xp_path
+          ),
+          revision = library_revision
         )
 
         current_reports(list(
@@ -579,6 +613,7 @@ server <- function(input, output, session) {
       }
     )
   })
+
 
   # Existing assets screen.
 
@@ -766,17 +801,17 @@ server <- function(input, output, session) {
           "csv"
         )
 
-        previous_portfolio <-
-          batercota::read_daycoval_portfolio(
-            path = previous_portfolio_path,
-            source_name = basename(previous_portfolio_path)
-          )
 
-        previous_position <-
-          batercota::read_daycoval_position(
-            path = previous_position_path,
-            source_name = basename(previous_position_path)
-          )
+        previous_portfolio <- bc_library_read(
+          path = previous_portfolio_path,
+          report_type = "daycoval_portfolio"
+        )
+
+        previous_position <- bc_library_read(
+          path = previous_position_path,
+          report_type = "daycoval_position"
+        )
+
 
         reconciliation <- batercota::reconcile_portfolio_return(
           previous_position = previous_position,
@@ -791,6 +826,14 @@ server <- function(input, output, session) {
           current_position = reports$position,
           previous_portfolio = previous_portfolio,
           current_portfolio = reports$portfolio
+        )
+
+        bc_library_register_imports(
+          paths = c(
+            previous_portfolio_path,
+            previous_position_path
+          ),
+          revision = library_revision
         )
 
         return_analysis(list(

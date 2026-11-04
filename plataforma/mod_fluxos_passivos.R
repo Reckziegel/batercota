@@ -34,6 +34,11 @@ module_dir <- dirname(
   )
 )
 
+source(
+  file.path(module_dir, "report_library_shiny.R"),
+  local = TRUE
+)
+
 diagnostic_path <- file.path(
   module_dir,
   "mod_fluxos_passivos_diagnostico.R"
@@ -73,6 +78,30 @@ bc_fluxos_report_path <- function(path, label, extension) {
 
   normalizePath(path, winslash = "/", mustWork = TRUE)
 }
+
+
+bc_fluxos_default_cash_plan_path <- function(
+    fund,
+    directory = module_dir
+) {
+  filenames <- c(
+    linear = "fundos - Movimentações Previstas LINEAR.xlsx",
+    long_term = "fundos - Movimentações Previstas Long Term LB.xlsx",
+    reta_alocacao = "fundos - Movimentações Previstas Reta Alocação.xlsx"
+  )
+
+  if (
+    !is.character(fund) ||
+    length(fund) != 1L ||
+    is.na(fund) ||
+    !fund %in% names(filenames)
+  ) {
+    return("")
+  }
+
+  file.path(directory, unname(filenames[[fund]]))
+}
+
 
 
 bc_fluxos_validate_reports <- function(
@@ -389,7 +418,12 @@ mod_fluxos_passivos_ui <- function(id) {
         shiny::textInput(
           ns("cash_plan_path"),
           "Gestora - Movimentações Previstas (XLSX)",
-          placeholder = "Cole o caminho completo"
+          placeholder = "Selecionado automaticamente pelo fundo"
+        )
+        ,
+        bc_library_picker_ui(
+          "cash_plan_path",
+          ns = ns
         ),
 
         shiny::textInput(
@@ -397,12 +431,21 @@ mod_fluxos_passivos_ui <- function(id) {
           "Daycoval - Movimento Diário (CSV)",
           placeholder = "Cole o caminho completo"
         ),
+        bc_library_picker_ui(
+          "daily_movement_path",
+          ns = ns
+        ),
 
         shiny::textInput(
           ns("cash_statement_path"),
           "Daycoval - Demonstrativo de Caixa (CSV)",
           placeholder = "Cole o caminho completo"
         ),
+        bc_library_picker_ui(
+          "cash_statement_path",
+          ns = ns
+        ),
+
 
         shiny::hr(),
 
@@ -420,8 +463,14 @@ mod_fluxos_passivos_ui <- function(id) {
             ns("opening_position_path"),
             "Daycoval - Posição C inicial (CSV)",
             placeholder = "Cole o caminho completo"
+          ),
+          bc_library_picker_ui(
+            "opening_position_path",
+            ns = ns
           )
         ),
+
+
 
         shiny::uiOutput(ns("reuse_info")),
 
@@ -481,15 +530,51 @@ mod_fluxos_passivos_ui <- function(id) {
 }
 
 
+
 mod_fluxos_passivos_server <- function(
     id,
     selected_fund,
-    current_reports
+    current_reports,
+    library_revision = shiny::reactiveVal(0L),
+    library_enabled = FALSE
 ) {
+
   shiny::moduleServer(id, function(input, output, session) {
     imported <- shiny::reactiveVal(NULL)
     liability_timeline <- shiny::reactiveVal(NULL)
     import_error <- shiny::reactiveVal(NULL)
+
+
+    shiny::observeEvent(selected_fund(), {
+      fund <- selected_fund()
+
+      path <- bc_fluxos_default_cash_plan_path(
+        fund = fund
+      )
+
+      shiny::updateTextInput(
+        session = session,
+        inputId = "cash_plan_path",
+        value = path
+      )
+    })
+
+
+    if (isTRUE(library_enabled)) {
+      bc_library_bind_pickers(
+        input = input,
+        session = session,
+        selected_fund = selected_fund,
+        revision = library_revision,
+        specs = c(
+          cash_plan_path = "fund_cash_plan",
+          daily_movement_path = "daycoval_daily_movement",
+          cash_statement_path = "daycoval_cash_statement",
+          opening_position_path = "daycoval_position"
+        )
+      )
+    }
+
     diagnostic <- mod_fluxos_diagnostico_server(
       id = "diagnostico",
       reconciliation = shiny::reactive(liability_timeline()),
@@ -522,8 +607,7 @@ mod_fluxos_passivos_server <- function(
       liability_timeline(NULL)
       import_error(NULL)
 
-      tryCatch(
-        {
+      tryCatch({
           fund <- selected_fund()
 
           cash_plan_path <- bc_fluxos_report_path(
@@ -544,20 +628,22 @@ mod_fluxos_passivos_server <- function(
             "csv"
           )
 
-          cash_plan <- batercota::read_fund_cash_plan(
+          cash_plan <- bc_library_read(
             path = cash_plan_path,
-            source_name = basename(cash_plan_path)
+            report_type = "fund_cash_plan"
           )
 
-          daily_movement <- batercota::read_daycoval_daily_movement(
+          daily_movement <- bc_library_read(
             path = movement_path,
-            source_name = basename(movement_path)
+            report_type = "daycoval_daily_movement"
           )
 
-          cash_statement <- batercota::read_daycoval_cash_statement(
+          cash_statement <- bc_library_read(
             path = cash_path,
-            source_name = basename(cash_path)
+            report_type = "daycoval_cash_statement"
           )
+
+          position_path <- NULL
 
           if (isTRUE(input$reuse_position)) {
             available <- current_reports()
@@ -565,10 +651,7 @@ mod_fluxos_passivos_server <- function(
             if (
               is.null(available) ||
               !identical(available$fund, fund) ||
-              !inherits(
-                available$position,
-                "daycoval_position"
-              )
+              !inherits(available$position, "daycoval_position")
             ) {
               cli::cli_abort(
                 "Não existe uma Posição C compatível na página Ativos."
@@ -583,9 +666,9 @@ mod_fluxos_passivos_server <- function(
               "csv"
             )
 
-            opening_position <- batercota::read_daycoval_position(
+            opening_position <- bc_library_read(
               path = position_path,
-              source_name = basename(position_path)
+              report_type = "daycoval_position"
             )
           }
 
@@ -613,6 +696,18 @@ mod_fluxos_passivos_server <- function(
           )
 
           liability_timeline(result)
+
+          if (isTRUE(library_enabled)) {
+            bc_library_register_imports(
+              paths = c(
+                cash_plan_path,
+                movement_path,
+                cash_path,
+                position_path
+              ),
+              revision = library_revision
+            )
+          }
         },
         error = function(error) {
           import_error(conditionMessage(error))

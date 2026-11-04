@@ -331,3 +331,32 @@ test_that("daily table retains separate reconciliation statuses", {
   ))
 })
 
+
+test_that("seleciona a planilha correta para cada fundo", {
+  expected <- c(
+    linear = "fundos - Movimentações Previstas LINEAR.xlsx",
+    long_term = "fundos - Movimentações Previstas Long Term LB.xlsx",
+    reta_alocacao = "fundos - Movimentações Previstas Reta Alocação.xlsx"
+  )
+
+  for (fund in names(expected)) {
+    result <- bc_fluxos_default_cash_plan_path(
+      fund = fund,
+      directory = "plataforma"
+    )
+
+    expect_identical(
+      result,
+      file.path("plataforma", unname(expected[[fund]]))
+    )
+  }
+
+  expect_identical(
+    bc_fluxos_default_cash_plan_path(
+      fund = "linear_select",
+      directory = "plataforma"
+    ),
+    ""
+  )
+})
+
