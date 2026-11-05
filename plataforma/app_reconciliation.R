@@ -16,7 +16,7 @@ if (!file.exists(module_path)) {
 }
 
 source(module_path, local = TRUE)
-
+source(file.path(dirname(module_path), "report_set_shiny.R"), local = TRUE)
 
 bc_report_path <- function(path, label, extensions) {
   if (
@@ -308,6 +308,10 @@ ui <- shiny::navbarPage(
             "Reta Alocação FIF" = "reta_alocacao"
           )
         ),
+        bc_report_set_picker_ui(
+          id = "asset_reports",
+          title = "Localizar relatórios de uma data"
+        ),
 
         shiny::textInput(
           "portfolio_path",
@@ -389,6 +393,10 @@ ui <- shiny::navbarPage(
         shiny::hr(),
 
         shiny::h5("Relatórios anteriores"),
+        bc_report_set_picker_ui(
+          id = "previous_reports",
+          title = "Localizar relatórios anteriores"
+        ),
 
         shiny::textInput(
           "previous_portfolio_path",
@@ -520,6 +528,41 @@ server <- function(input, output, session) {
   # Return reconciliation is independent of the assets screen.
   return_analysis <- shiny::reactiveVal(NULL)
   return_error <- shiny::reactiveVal(NULL)
+
+  bc_report_set_picker_server(
+    id = "asset_reports",
+    selected_fund = selected_fund,
+    report_fields = c(
+      portfolio_path = "daycoval_portfolio",
+      position_path = "daycoval_position",
+      xp_path = "xp_statement"
+    ),
+    revision = library_revision,
+    target_session = session,
+    on_apply = function() {
+      analysis(NULL)
+      read_error(NULL)
+      current_reports(NULL)
+      return_analysis(NULL)
+      return_error(NULL)
+    }
+  )
+
+  bc_report_set_picker_server(
+    id = "previous_reports",
+    selected_fund = selected_fund,
+    report_fields = c(
+      previous_portfolio_path = "daycoval_portfolio",
+      previous_position_path = "daycoval_position"
+    ),
+    revision = library_revision,
+    target_session = session,
+    on_apply = function() {
+      return_analysis(NULL)
+      return_error(NULL)
+    }
+  )
+
   shiny::observeEvent(
     input$fund,
     {

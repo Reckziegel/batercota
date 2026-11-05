@@ -355,3 +355,31 @@ test_that("assets page rejects reports from another fund", {
     )
   })
 })
+
+
+test_that("app exposes date-based library selection", {
+  app <- bc_app_test_source()
+
+  html <- paste(
+    as.character(app$ui),
+    collapse = ""
+  )
+
+  ids <- c(
+    "asset_reports-reference_date",
+    "asset_reports-search",
+    "asset_reports-apply",
+    "previous_reports-reference_date",
+    "previous_reports-search",
+    "previous_reports-apply"
+  )
+
+  for (id in ids) {
+    expect_match(
+      html,
+      id,
+      fixed = TRUE
+    )
+  }
+})
+
