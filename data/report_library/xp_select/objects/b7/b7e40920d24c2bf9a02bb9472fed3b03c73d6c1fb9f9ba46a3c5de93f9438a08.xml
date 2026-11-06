@@ -1,0 +1,322 @@
+<?xml version='1.0'?>
+
+<arquivoposicao_4_01>
+<fundo>
+	<header>
+ 		<isin>BRXXXXXXXX00</isin>
+ 		<cnpj>57593831000131</cnpj>
+ 		<nome>XP - RETA - LINEAR SELECT FIM CP</nome>
+ 		<dtposicao>20261029</dtposicao>
+ 		<nomeadm>XP INVESTIMENTOS CORRETORA DE CAMBIO, TITULOS E VALORES MOBI</nomeadm>
+ 		<cnpjadm>02332886000104</cnpjadm>
+ 		<nomegestor>RETA ASSET LTDA.</nomegestor>
+ 		<cnpjgestor>51004498000100</cnpjgestor>
+ 		<nomecustodiante>S3 CACEIS BRASIL DTVM</nomecustodiante>
+ 		<cnpjcustodiante>62318407000119</cnpjcustodiante>
+ 		<valorcota>1.314269190</valorcota>
+ 		<quantidade>42919071.315267400</quantidade>
+ 		<patliq>56407213.46</patliq>
+ 		<valorativos>56430431.36</valorativos>
+ 		<valorreceber>3575.83</valorreceber>
+ 		<valorpagar>26793.24</valorpagar>
+ 		<vlcotasemitir>0.00</vlcotasemitir>
+ 		<vlcotasresgatar>0.00</vlcotasresgatar>
+ 		<codanbid>180797</codanbid>
+ 		<tipofundo>229</tipofundo>
+ 		<nivelrsc></nivelrsc> 	</header> 	<titpublico>
+ 		<isin>BRSTNCLF1RL5</isin>
+ 		<codativo>210100</codativo>
+ 		<cusip></cusip>
+ 		<dtemissao>20000701</dtemissao>
+ 		<dtoperacao>20251204</dtoperacao>
+ 		<dtvencimento>20290301</dtvencimento>
+ 		<qtdisponivel>0.00000000</qtdisponivel>
+ 		<qtgarantia>3.0000</qtgarantia>
+ 		<depgar>3</depgar>
+ 		<pucompra>0.00000000</pucompra>
+ 		<puvencimento>0.00000000</puvencimento>
+ 		<puposicao>20165.03204000</puposicao>
+ 		<puemissao>1000.00000000</puemissao>
+ 		<principal>0.00</principal>
+ 		<tributos>0.00</tributos>
+ 		<valorfindisp>0.00</valorfindisp>
+ 		<valorfinemgar>60495.10</valorfinemgar>
+ 		<coupom>0.05</coupom>
+ 		<indexador>SEL</indexador>
+ 		<percindex>0.00</percindex>
+ 		<caracteristica>N</caracteristica>
+ 		<percprovcred>0</percprovcred>
+ 		<classeoperacao>C</classeoperacao>
+ 		<idinternoativo>001368807</idinternoativo>
+ 		<nivelrsc></nivelrsc> 	</titpublico> 	<futuros>
+ 		<isin>BRBMEFD1I678</isin>
+ 		<ativo>DI1</ativo>
+ 		<cnpjcorretora>51014223000149</cnpjcorretora>
+ 		<serie>F33</serie>
+ 		<quantidade>4.00</quantidade>
+ 		<vltotalpos>167271.44</vltotalpos>
+ 		<tributos>0.00</tributos>
+ 		<dtvencimento>20330103</dtvencimento>
+ 		<vlajuste>-893.84</vlajuste>
+ 		<classeoperacao>C</classeoperacao>
+ 		<hedge>N</hedge>
+ 		<tphedge>0</tphedge> 	</futuros> 	<caixa>
+ 		<isininstituicao>BRSTDB</isininstituicao>
+ 		<tpconta>D</tpconta>
+ 		<saldo>2000.00</saldo>
+ 		<nivelrsc>BB</nivelrsc>
+ 	</caixa>
+ 	<cotas>
+ 		<isin>BR025WCTF016</isin>
+ 		<cnpjfundo>32990051000102</cnpjfundo>
+ 		<qtdisponivel>431487.707345320</qtdisponivel>
+ 		<qtgarantia>0.000000000</qtgarantia>
+ 		<puposicao>2.24087280</puposicao>
+ 		<tributos>0.00</tributos>
+ 		<nivelrsc></nivelrsc> 	</cotas> 	<cotas>
+ 		<isin>BR02RKCTF009</isin>
+ 		<cnpjfundo>34431610000161</cnpjfundo>
+ 		<qtdisponivel>3921542.892367260</qtdisponivel>
+ 		<qtgarantia>0.000000000</qtgarantia>
+ 		<puposicao>2.24752408</puposicao>
+ 		<tributos>0.00</tributos>
+ 		<nivelrsc></nivelrsc> 	</cotas> 	<cotas>
+ 		<isin>BR02WGCTF007</isin>
+ 		<cnpjfundo>34218678000167</cnpjfundo>
+ 		<qtdisponivel>2079551.755777900</qtdisponivel>
+ 		<qtgarantia>0.000000000</qtgarantia>
+ 		<puposicao>2.07513850</puposicao>
+ 		<tributos>0.00</tributos>
+ 		<nivelrsc></nivelrsc> 	</cotas> 	<cotas>
+ 		<isin>BR0381CTF006</isin>
+ 		<cnpjfundo>35378376000119</cnpjfundo>
+ 		<qtdisponivel>14625.393229109</qtdisponivel>
+ 		<qtgarantia>0.000000000</qtgarantia>
+ 		<puposicao>207.24825640</puposicao>
+ 		<tributos>0.00</tributos>
+ 		<nivelrsc></nivelrsc> 	</cotas> 	<cotas>
+ 		<isin>BR06JPCTF006</isin>
+ 		<cnpjfundo>29250121000173</cnpjfundo>
+ 		<qtdisponivel>1349166.721265570</qtdisponivel>
+ 		<qtgarantia>0.000000000</qtgarantia>
+ 		<puposicao>2.24696070</puposicao>
+ 		<tributos>0.00</tributos>
+ 		<nivelrsc></nivelrsc> 	</cotas> 	<cotas>
+ 		<isin>BR07LLCTF009</isin>
+ 		<cnpjfundo>37525998000158</cnpjfundo>
+ 		<qtdisponivel>129474.784528515</qtdisponivel>
+ 		<qtgarantia>0.000000000</qtgarantia>
+ 		<puposicao>18.43739635</puposicao>
+ 		<tributos>0.00</tributos>
+ 		<nivelrsc></nivelrsc> 	</cotas> 	<cotas>
+ 		<isin>BR09NSCTF022</isin>
+ 		<cnpjfundo>39487617000119</cnpjfundo>
+ 		<qtdisponivel>1265341.757078320</qtdisponivel>
+ 		<qtgarantia>0.000000000</qtgarantia>
+ 		<puposicao>1.89171796</puposicao>
+ 		<tributos>0.00</tributos>
+ 		<nivelrsc></nivelrsc> 	</cotas> 	<cotas>
+ 		<isin>BR0ABUCTF001</isin>
+ 		<cnpjfundo>43164438000118</cnpjfundo>
+ 		<qtdisponivel>1996349.099350360</qtdisponivel>
+ 		<qtgarantia>0.000000000</qtgarantia>
+ 		<puposicao>1.99249200</puposicao>
+ 		<tributos>0.00</tributos>
+ 		<nivelrsc></nivelrsc> 	</cotas> 	<cotas>
+ 		<isin>BR0B5WCTF001</isin>
+ 		<cnpjfundo>43121036000136</cnpjfundo>
+ 		<qtdisponivel>4721.569153248</qtdisponivel>
+ 		<qtgarantia>0.000000000</qtgarantia>
+ 		<puposicao>204.41640526</puposicao>
+ 		<tributos>0.00</tributos>
+ 		<nivelrsc></nivelrsc> 	</cotas> 	<cotas>
+ 		<isin>BR0C34CTF002</isin>
+ 		<cnpjfundo>45683300000150</cnpjfundo>
+ 		<qtdisponivel>567.411949889</qtdisponivel>
+ 		<qtgarantia>0.000000000</qtgarantia>
+ 		<puposicao>184.85663060</puposicao>
+ 		<tributos>0.00</tributos>
+ 		<nivelrsc></nivelrsc> 	</cotas> 	<cotas>
+ 		<isin>BR0DHBCTF002</isin>
+ 		<cnpjfundo>47640954000122</cnpjfundo>
+ 		<qtdisponivel>2389861.067561820</qtdisponivel>
+ 		<qtgarantia>0.000000000</qtgarantia>
+ 		<puposicao>1.73787621</puposicao>
+ 		<tributos>0.00</tributos>
+ 		<nivelrsc></nivelrsc> 	</cotas> 	<cotas>
+ 		<isin>BR0E6MCTF007</isin>
+ 		<cnpjfundo>47936719000100</cnpjfundo>
+ 		<qtdisponivel>2443653.716132730</qtdisponivel>
+ 		<qtgarantia>0.000000000</qtgarantia>
+ 		<puposicao>1.73245190</puposicao>
+ 		<tributos>0.00</tributos>
+ 		<nivelrsc></nivelrsc> 	</cotas> 	<cotas>
+ 		<isin>BR0F37CTF008</isin>
+ 		<cnpjfundo>49983891000132</cnpjfundo>
+ 		<qtdisponivel>727.878085039</qtdisponivel>
+ 		<qtgarantia>0.000000000</qtgarantia>
+ 		<puposicao>1726.29412202</puposicao>
+ 		<tributos>0.00</tributos>
+ 		<nivelrsc></nivelrsc> 	</cotas> 	<cotas>
+ 		<isin>BR0FMDCTF003</isin>
+ 		<cnpjfundo>50716952000184</cnpjfundo>
+ 		<qtdisponivel>0.003716768</qtdisponivel>
+ 		<qtgarantia>0.000000000</qtgarantia>
+ 		<puposicao>1.62776500</puposicao>
+ 		<tributos>0.00</tributos>
+ 		<nivelrsc></nivelrsc> 	</cotas> 	<cotas>
+ 		<isin>BR0JBGCTF001</isin>
+ 		<cnpjfundo>54851094000131</cnpjfundo>
+ 		<qtdisponivel>571307.923150554</qtdisponivel>
+ 		<qtgarantia>0.000000000</qtgarantia>
+ 		<puposicao>1.38411460</puposicao>
+ 		<tributos>0.00</tributos>
+ 		<nivelrsc></nivelrsc> 	</cotas> 	<cotas>
+ 		<isin>BR0MP3CTF001</isin>
+ 		<cnpjfundo>58038938000180</cnpjfundo>
+ 		<qtdisponivel>3382194.365671890</qtdisponivel>
+ 		<qtgarantia>0.000000000</qtgarantia>
+ 		<puposicao>1.36550129</puposicao>
+ 		<tributos>0.00</tributos>
+ 		<nivelrsc></nivelrsc> 	</cotas> 	<cotas>
+ 		<isin>BRATS8CTF004</isin>
+ 		<cnpjfundo>20441301000168</cnpjfundo>
+ 		<qtdisponivel>296350.276645520</qtdisponivel>
+ 		<qtgarantia>0.000000000</qtgarantia>
+ 		<puposicao>4.80179036</puposicao>
+ 		<tributos>0.00</tributos>
+ 		<nivelrsc></nivelrsc> 	</cotas> 	<cotas>
+ 		<isin>BRFXP9CTF004</isin>
+ 		<cnpjfundo>22003930000131</cnpjfundo>
+ 		<qtdisponivel>1259617.076616060</qtdisponivel>
+ 		<qtgarantia>0.000000000</qtgarantia>
+ 		<puposicao>3.29351228</puposicao>
+ 		<tributos>0.00</tributos>
+ 		<nivelrsc></nivelrsc> 	</cotas> 	<cotas>
+ 		<isin>BROUP1CTF003</isin>
+ 		<cnpjfundo>14171578000115</cnpjfundo>
+ 		<qtdisponivel>305716.950711780</qtdisponivel>
+ 		<qtgarantia>0.000000000</qtgarantia>
+ 		<puposicao>5.65580487</puposicao>
+ 		<tributos>0.00</tributos>
+ 		<nivelrsc></nivelrsc> 	</cotas> 	<cotas>
+ 		<isin>BRVVGICTF000</isin>
+ 		<cnpjfundo>17313316000136</cnpjfundo>
+ 		<qtdisponivel>0.225736702</qtdisponivel>
+ 		<qtgarantia>0.000000000</qtgarantia>
+ 		<puposicao>4930276.98139256</puposicao>
+ 		<tributos>0.00</tributos>
+ 		<nivelrsc></nivelrsc> 	</cotas> 	<cotas>
+ 		<isin>BRXPT5CTF006</isin>
+ 		<cnpjfundo>27227796000176</cnpjfundo>
+ 		<qtdisponivel>46522.462231088</qtdisponivel>
+ 		<qtgarantia>0.000000000</qtgarantia>
+ 		<puposicao>2.49929239</puposicao>
+ 		<tributos>0.00</tributos>
+ 		<nivelrsc></nivelrsc> 	</cotas> 	<cotas>
+ 		<isin>BRXXXXXXXXXX</isin>
+ 		<cnpjfundo>42260903000151</cnpjfundo>
+ 		<qtdisponivel>1358540.877408020</qtdisponivel>
+ 		<qtgarantia>0.000000000</qtgarantia>
+ 		<puposicao>2.06047040</puposicao>
+ 		<tributos>0.00</tributos>
+ 		<nivelrsc></nivelrsc>
+ 	</cotas>
+ 	<despesas>
+ 		<txadm>25073.07</txadm>
+ 		<tributos>0.00</tributos>
+ 		<perctaxaadm>0.00</perctaxaadm>
+ 		<txperf>N</txperf>
+ 		<vltxperf>0.00</vltxperf>
+ 		<perctxperf>0.00</perctxperf>
+ 		<percindex>0.00000000</percindex>
+ 		<outtax>0.00</outtax>
+ 		<indexador></indexador> 	</despesas> 	<outrasdespesas>
+ 		<coddesp>12</coddesp>
+ 		<valor>376.00</valor> 	</outrasdespesas> 	<outrasdespesas>
+ 		<coddesp>13</coddesp>
+ 		<valor>715.74</valor> 	</outrasdespesas> 	<outrasdespesas>
+ 		<coddesp>15</coddesp>
+ 		<valor>1094.26</valor> 	</outrasdespesas> 	<outrasdespesas>
+ 		<coddesp>16</coddesp>
+ 		<valor>0.21</valor> 	</outrasdespesas> 	<provisao>
+ 		<codprov>12</codprov>
+ 		<credeb>C</credeb>
+ 		<dt>20261218</dt>
+ 		<valor>336.42</valor>
+ 	</provisao>
+ 	<provisao>
+ 		<codprov>13</codprov>
+ 		<credeb>D</credeb>
+ 		<dt>20261109</dt>
+ 		<valor>511.20</valor>
+ 	</provisao>
+ 	<provisao>
+ 		<codprov>14</codprov>
+ 		<credeb>C</credeb>
+ 		<dt>20261231</dt>
+ 		<valor>3239.41</valor>
+ 	</provisao>
+ 	<provisao>
+ 		<codprov>15</codprov>
+ 		<credeb>D</credeb>
+ 		<dt>20261109</dt>
+ 		<valor>1044.43</valor>
+ 	</provisao>
+ 	<provisao>
+ 		<codprov>16</codprov>
+ 		<credeb>D</credeb>
+ 		<dt>20261116</dt>
+ 		<valor>0.10</valor>
+ 	</provisao>
+ 	<provisao>
+ 		<codprov>34</codprov>
+ 		<credeb>D</credeb>
+ 		<dt>20260608</dt>
+ 		<valor>1233.12</valor>
+ 	</provisao>
+ 	<provisao>
+ 		<codprov>34</codprov>
+ 		<credeb>D</credeb>
+ 		<dt>20261109</dt>
+ 		<valor>23931.13</valor>
+ 	</provisao>
+ 	<provisao>
+ 		<codprov>35</codprov>
+ 		<credeb>D</credeb>
+ 		<dt>20251205</dt>
+ 		<valor>0.01</valor>
+ 	</provisao>
+ 	<provisao>
+ 		<codprov>35</codprov>
+ 		<credeb>D</credeb>
+ 		<dt>20260108</dt>
+ 		<valor>34.97</valor>
+ 	</provisao>
+ 	<provisao>
+ 		<codprov>35</codprov>
+ 		<credeb>D</credeb>
+ 		<dt>20260608</dt>
+ 		<valor>0.24</valor>
+ 	</provisao>
+ 	<provisao>
+ 		<codprov>35</codprov>
+ 		<credeb>D</credeb>
+ 		<dt>20260707</dt>
+ 		<valor>37.79</valor>
+ 	</provisao>
+ 	<provisao>
+ 		<codprov>35</codprov>
+ 		<credeb>D</credeb>
+ 		<dt>20261230</dt>
+ 		<valor>0.24</valor>
+ 	</provisao>
+ 	<provisao>
+ 		<codprov>35</codprov>
+ 		<credeb>D</credeb>
+ 		<dt>20281229</dt>
+ 		<valor>0.01</valor>
+ </provisao>
+</fundo>
+
+</arquivoposicao_4_01>
