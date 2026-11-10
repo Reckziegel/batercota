@@ -406,10 +406,24 @@ xp_select_fluxos_server <- function(
               )
             }
 
-            revisions <- batercota::compare_xp_select_cash_versions(
-              previous = previous,
-              current = current
+
+            overlapping_periods <- max(
+              previous$metadata$period_start,
+              current$metadata$period_start
+            ) <= min(
+              previous$metadata$period_end,
+              current$metadata$period_end
             )
+
+            revisions <- if (overlapping_periods) {
+              batercota::compare_xp_select_cash_versions(
+                previous = previous,
+                current = current
+              )
+            } else {
+              NULL
+            }
+
           }
 
           list(
@@ -644,6 +658,14 @@ xp_select_fluxos_server <- function(
       shiny::req(analysis)
 
       if (is.null(analysis$previous)) {
+        if (is.null(analysis$revisions)) {
+          return(
+            shiny::p(
+              "Os relatórios não possuem períodos em comum. ",
+              "A comparação de revisões históricas não se aplica."
+            )
+          )
+        }
         return(shiny::p(
           "Nenhum relatório anterior disponível para comparação."
         ))

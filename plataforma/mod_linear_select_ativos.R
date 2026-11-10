@@ -188,32 +188,119 @@ xp_assets_read_xml <- function(path, reference_date) {
 }
 
 
+
 xp_assets_read_hub <- function(path, reference_date) {
   statement <- batercota::read_xp_statement(path)
 
   if (statement$metadata$account_number != "10850617") {
-    stop("O extrato Hub não corresponde ao Linear Select.", call. = FALSE)
+    stop(
+      "O extrato Hub não corresponde ao Linear Select.",
+      call. = FALSE
+    )
   }
 
   if (statement$metadata$position_date != reference_date) {
-    stop("A data do extrato Hub não corresponde à seleção.", call. = FALSE)
+    stop(
+      "A data do extrato Hub não corresponde à seleção.",
+      call. = FALSE
+    )
   }
 
   positions <- statement$positions |>
     dplyr::transmute(
       asset_name_hub = .data$asset_name,
+      unit_price_hub = .data$unit_price,
       quantity_hub = .data$quantity,
-      value_hub = .data$gross_value,
-      price_key = xp_assets_price_key(.data$unit_price)
+      value_hub = .data$gross_value
     )
 
-  xp_assets_validate_keys(positions, "Extrato XP Hub")
+  valid <- all(is.finite(positions$unit_price_hub)) &&
+    all(is.finite(positions$quantity_hub)) &&
+    all(is.finite(positions$value_hub)) &&
+    all(positions$unit_price_hub >= 0) &&
+    all(positions$quantity_hub >= 0) &&
+    all(positions$value_hub >= 0)
+
+  if (!valid) {
+    stop(
+      "O extrato Hub contém posições financeiras inválidas.",
+      call. = FALSE
+    )
+  }
+
+  positions$price_key <- NA_character_
+
+  valid_prices <- positions$unit_price_hub > 0
+
+  positions$price_key[valid_prices] <- xp_assets_price_key(
+    positions$unit_price_hub[valid_prices]
+  )
+
+  matched_keys <- positions$price_key[
+    !is.na(positions$price_key)
+  ]
+
+  if (anyDuplicated(matched_keys)) {
+    stop(
+      "O extrato Hub contém preços duplicados.",
+      call. = FALSE
+    )
+  }
 
   list(
     total = statement$metadata$total_gross,
     positions = positions
   )
 }
+
+
+xp_assets_match_hub <- function(
+    hub_positions,
+    portfolio_positions,
+    quantity_tolerance = 0.02,
+    value_tolerance = 0.05
+) {
+  zero_price_rows <- which(
+    is.na(hub_positions$price_key) &
+      hub_positions$unit_price_hub == 0
+  )
+
+  for (i in zero_price_rows) {
+    available <- !portfolio_positions$price_key %in%
+      hub_positions$price_key
+
+    candidates <- which(
+      available &
+        abs(
+          portfolio_positions$quantity_adm -
+            hub_positions$quantity_hub[[i]]
+        ) <= quantity_tolerance &
+        abs(
+          portfolio_positions$value_adm -
+            hub_positions$value_hub[[i]]
+        ) <= value_tolerance
+    )
+
+    if (length(candidates) == 1L) {
+      hub_positions$price_key[[i]] <-
+        portfolio_positions$price_key[[candidates]]
+    }
+  }
+
+  matched_keys <- hub_positions$price_key[
+    !is.na(hub_positions$price_key)
+  ]
+
+  if (anyDuplicated(matched_keys)) {
+    stop(
+      "Associação ambígua entre Carteira e Hub.",
+      call. = FALSE
+    )
+  }
+
+  hub_positions
+}
+
 
 
 xp_assets_empty_hub <- function() {
@@ -287,7 +374,10 @@ xp_assets_reconcile <- function(
   hub_positions <- if (is.null(hub)) {
     xp_assets_empty_hub()
   } else {
-    hub$positions
+    xp_assets_match_hub(
+      hub_positions = hub$positions,
+      portfolio_positions = portfolio$positions
+    )
   }
 
   comparison <- portfolio$positions |>
@@ -297,7 +387,8 @@ xp_assets_reconcile <- function(
     ) |>
     dplyr::full_join(
       hub_positions,
-      by = "price_key"
+      by = "price_key",
+      na_matches = "never"
     ) |>
     dplyr::mutate(
       difference_xml = .data$value_adm - .data$value_xml,
@@ -320,13 +411,14 @@ xp_assets_reconcile <- function(
   } else {
     comparison <- comparison |>
       dplyr::mutate(
+
         status_hub = dplyr::case_when(
+          is.na(.data$asset_code) & .data$unit_price_hub == 0 ~ "Cota zero sem associação",
           is.na(.data$asset_code) ~ "Somente Hub",
-          is.na(.data$asset_name_hub) &
-            .data$asset_code == "CUST2451" ~ "Fundo de zeragem",
-          is.na(.data$asset_name_hub) &
-            abs(.data$value_adm) <= 0.01 ~ "Posição residual",
+          is.na(.data$asset_name_hub) & .data$asset_code == "CUST2451" ~ "Fundo de zeragem",
+          is.na(.data$asset_name_hub) & abs(.data$value_adm) <= 0.01 ~ "Posição residual",
           is.na(.data$asset_name_hub) ~ "Ausente no Hub",
+          .data$unit_price_hub == 0 ~ "Cota zerada no Hub",
           abs(.data$difference_hub) <= tolerance ~ "OK",
           TRUE ~ "Divergente"
         )

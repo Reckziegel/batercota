@@ -319,17 +319,22 @@ read_xp_select_cash <- function(path) {
     cli::cli_abort("Saldo de abertura inválido.")
   }
 
+
   if (
     nrow(closing) == 0L ||
+    anyNA(closing$date) ||
     anyNA(closing$balance) ||
-    anyDuplicated(closing$date) ||
-    min(closing$date) != metadata$period_start ||
+    anyDuplicated(closing$date) > 0L ||
+    any(closing$date < metadata$period_start) ||
+    any(closing$date > metadata$period_end) ||
+    min(closing$date) <= opening$date[[1L]] ||
     max(closing$date) != metadata$period_end
   ) {
     cli::cli_abort(
       "Saldos de fechamento ausentes ou inconsistentes."
     )
   }
+
 
   if (
     anyNA(transactions$balance) ||
