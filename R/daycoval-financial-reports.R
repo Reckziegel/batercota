@@ -29,10 +29,21 @@ read_daycoval_daily_movement <- function(
     record_type = "P0115_QuebraPag"
   )
 
+  comma_delimited <- identical(
+    attr(source$raw, "daycoval_delimiter"),
+    ","
+  )
+
   entries <- daycoval_financial_parse_fields(
     data = entries,
     numeric_columns = c("quantidade", "debito", "credito"),
     date_columns = c("data_mov", "dt_compra"),
+    numeric_formats = if (comma_delimited) {
+      c(quantidade = "br", debito = "us", credito = "us")
+    } else {
+      NULL
+    },
+    date_format = if (comma_delimited) "%m/%d/%Y" else "%d/%m/%Y",
     text_columns = c(
       "carteira", "nome_crt", "moeda", "grupo",
       "titulo", "nome_tit", "especificacao",
@@ -310,7 +321,9 @@ daycoval_financial_parse_fields <- function(
     data,
     numeric_columns = character(),
     date_columns = character(),
-    text_columns = character()
+    text_columns = character(),
+    numeric_formats = NULL,
+    date_format = "%d/%m/%Y"
 ) {
   required <- c(
     "source_line",
@@ -333,11 +346,21 @@ daycoval_financial_parse_fields <- function(
 
     missing <- is.na(values) | values == ""
 
-    valid_pattern <- paste0(
-      "^[+-]?",
-      "(?:[0-9]+|[0-9]{1,3}(?:\\.[0-9]{3})+)",
-      "(?:,[0-9]+)?$"
-    )
+    numeric_format <- if (is.null(numeric_formats)) {
+      "br"
+    } else {
+      unname(numeric_formats[[field]])
+    }
+
+    valid_pattern <- if (identical(numeric_format, "us")) {
+      "^[+-]?[0-9]+(?:\\.[0-9]+)?$"
+    } else {
+      paste0(
+        "^[+-]?",
+        "(?:[0-9]+|[0-9]{1,3}(?:\\.[0-9]{3})+)",
+        "(?:,[0-9]+)?$"
+      )
+    }
 
     valid <- stringr::str_detect(
       values,
@@ -356,11 +379,19 @@ daycoval_financial_parse_fields <- function(
       )
     }
 
-    normalized <- stringr::str_replace_all(
-      values,
-      stringr::fixed("."),
-      ""
-    )
+    if (identical(numeric_format, "us")) {
+      normalized <- stringr::str_replace_all(
+        values,
+        stringr::fixed("."),
+        ","
+      )
+    } else {
+      normalized <- stringr::str_replace_all(
+        values,
+        stringr::fixed("."),
+        ""
+      )
+    }
 
     data[[field]] <- daycoval_parse_number(
       x = normalized,
@@ -373,7 +404,8 @@ daycoval_financial_parse_fields <- function(
     data[[field]] <- daycoval_parse_date(
       x = data[[field]],
       field = field,
-      source_line = data$source_line
+      source_line = data$source_line,
+      format = date_format
     )
   }
 
