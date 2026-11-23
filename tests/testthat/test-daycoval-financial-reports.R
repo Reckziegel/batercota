@@ -370,3 +370,55 @@ test_that("rejects malformed Brazilian numbers", {
   )
 })
 
+
+
+test_that("parses mixed US and Brazilian numeric formats", {
+  data <- tibble::tibble(
+    source_line = 1:2,
+    quantidade = c("131,79283423", NA_character_),
+    debito = c("0.0", "-9061.72"),
+    credito = c("256527.84", "0.0"),
+    data_mov = c("11/12/2026", "11/18/2026"),
+    dt_compra = c("", "06/15/2026")
+  )
+
+  result <- daycoval_financial_parse_fields(
+    data = data,
+    numeric_columns = c("quantidade", "debito", "credito"),
+    date_columns = c("data_mov", "dt_compra"),
+    numeric_formats = c(
+      quantidade = "br",
+      debito = "us",
+      credito = "us"
+    ),
+    date_format = "%m/%d/%Y"
+  )
+
+  expect_equal(result$quantidade[[1L]], 131.79283423)
+  expect_true(is.na(result$quantidade[[2L]]))
+  expect_equal(result$debito, c(0, -9061.72))
+  expect_equal(result$credito, c(256527.84, 0))
+  expect_equal(
+    result$data_mov,
+    as.Date(c("2026-11-12", "2026-11-18"))
+  )
+  expect_true(is.na(result$dt_compra[[1L]]))
+  expect_equal(result$dt_compra[[2L]], as.Date("2026-06-15"))
+})
+
+
+test_that("rejects malformed US financial values", {
+  data <- tibble::tibble(
+    source_line = 8L,
+    debito = "1,234.50"
+  )
+
+  expect_error(
+    daycoval_financial_parse_fields(
+      data = data,
+      numeric_columns = "debito",
+      numeric_formats = c(debito = "us")
+    ),
+    "Valor numérico inválido"
+  )
+})
