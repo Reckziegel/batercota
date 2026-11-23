@@ -50,18 +50,31 @@ read_daycoval_records <- function(
     cli::cli_abort("O arquivo CSV está vazio.")
   }
 
-  if (any(grepl('"', lines, fixed = TRUE))) {
-    cli::cli_abort(
-      "O arquivo contém aspas e exige validação do delimitador."
-    )
+  has_semicolon <- any(grepl("^[0-9]+;", lines))
+  has_comma <- any(grepl("^[0-9]+,", lines))
+
+  if (has_semicolon && has_comma) {
+    cli::cli_abort("O arquivo contém delimitadores inconsistentes.")
   }
 
-  fields <- stringr::str_split(
-    string = lines,
-    pattern = stringr::fixed(";")
-  )
+  delimiter <- if (has_comma) "," else ";"
 
-  tibble::tibble(
+  if (delimiter == ";") {
+    if (any(grepl('"', lines, fixed = TRUE))) {
+      cli::cli_abort(
+        "O arquivo contém aspas e exige validação do delimitador."
+      )
+    }
+
+    fields <- stringr::str_split(
+      string = lines,
+      pattern = stringr::fixed(";")
+    )
+  } else {
+    fields <- daycoval_split_comma_records(lines)
+  }
+
+  records <- tibble::tibble(
     source_file = source_name,
     source_line = seq_along(lines),
     record_number = daycoval_get_field(fields, 1L),
@@ -71,6 +84,90 @@ read_daycoval_records <- function(
     fields = fields,
     raw_line = lines
   )
+
+  attr(records, "daycoval_delimiter") <- delimiter
+  records
+}
+
+
+daycoval_split_comma_records <- function(lines) {
+  is_separator <- grepl("^[0-9]+$", lines)
+  content <- lines[!is_separator]
+  fields <- vector("list", length(lines))
+
+  fields[is_separator] <- as.list(lines[is_separator])
+
+  if (length(content) == 0L) {
+    return(fields)
+  }
+
+  quote_count <- stringr::str_count(
+    content,
+    stringr::fixed('"')
+  )
+
+  if (any(quote_count %% 2L != 0L)) {
+    cli::cli_abort("O CSV contém aspas sem fechamento.")
+  }
+
+  connection <- textConnection(content)
+  on.exit(close(connection), add = TRUE)
+
+  field_counts <- utils::count.fields(
+    connection,
+    sep = ",",
+    quote = '"',
+    blank.lines.skip = FALSE,
+    comment.char = ""
+  )
+
+  if (
+    length(field_counts) != length(content) ||
+    anyNA(field_counts) ||
+    any(field_counts < 2L)
+  ) {
+    cli::cli_abort("O CSV com vírgulas contém registros inválidos.")
+  }
+
+  parsed <- tryCatch(
+    utils::read.table(
+      text = paste(content, collapse = "\n"),
+      sep = ",",
+      header = FALSE,
+      quote = '"',
+      fill = TRUE,
+      colClasses = "character",
+      na.strings = character(),
+      blank.lines.skip = FALSE,
+      check.names = FALSE,
+      comment.char = "",
+      stringsAsFactors = FALSE,
+      strip.white = FALSE
+    ),
+    error = function(error) {
+      cli::cli_abort(
+        "Não foi possível interpretar o CSV com vírgulas.",
+        parent = error
+      )
+    }
+  )
+
+  if (nrow(parsed) != length(content)) {
+    cli::cli_abort("O CSV com vírgulas contém registros inválidos.")
+  }
+
+  parsed_fields <- purrr::map(
+    seq_along(content),
+    function(i) {
+      as.character(unlist(
+        parsed[i, seq_len(field_counts[[i]]), drop = FALSE],
+        use.names = FALSE
+      ))
+    }
+  )
+
+  fields[!is_separator] <- parsed_fields
+  fields
 }
 
 
@@ -216,14 +313,16 @@ daycoval_parse_number <- function(x, field, source_line) {
 }
 
 
-daycoval_parse_date <- function(x, field, source_line) {
+daycoval_parse_date <- function(
+    x, field, source_line, format = "%d/%m/%Y"
+) {
   value <- stringr::str_trim(x)
   missing <- is.na(value) | value == ""
 
   parsed <- suppressWarnings(
     readr::parse_date(
       value,
-      format = "%d/%m/%Y",
+      format = format,
       na = ""
     )
   )
