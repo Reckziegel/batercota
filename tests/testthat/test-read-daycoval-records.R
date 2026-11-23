@@ -183,3 +183,47 @@ test_that("rejects unsupported quoted fields", {
 
 
 
+
+
+test_that("reads comma-delimited records with quoted decimal values", {
+  path <- tempfile(fileext = ".csv")
+  on.exit(unlink(path), add = TRUE)
+
+  lines <- c(
+    '1,P0115_QuebraPag,V,13386778,"131,79283423",4525.42',
+    "2",
+    "3,P0115_QuebraPag,C,Carteira,Quantidade,Debito"
+  )
+
+  writeLines(lines, path, useBytes = TRUE)
+
+  result <- read_daycoval_records(path)
+
+  expect_identical(
+    attr(result, "daycoval_delimiter"),
+    ","
+  )
+  expect_identical(result$n_fields, c(6L, 1L, 6L))
+  expect_identical(result$fields[[1L]][5:6], c("131,79283423", "4525.42"))
+  expect_identical(result$raw_line, lines)
+})
+
+
+test_that("rejects unterminated quoted comma-delimited records", {
+  path <- tempfile(fileext = ".csv")
+  on.exit(unlink(path), add = TRUE)
+
+  writeLines('1,P0115_QuebraPag,V,"131,79283423', path)
+
+  expect_error(read_daycoval_records(path), "aspas sem fechamento")
+})
+
+
+test_that("rejects mixed record delimiters", {
+  path <- tempfile(fileext = ".csv")
+  on.exit(unlink(path), add = TRUE)
+
+  writeLines(c("1;P1030;V;13386778", "2,P0115_QuebraPag,V,13386778"), path)
+
+  expect_error(read_daycoval_records(path), "delimitadores inconsistentes")
+})
